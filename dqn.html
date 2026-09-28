@@ -1,0 +1,358 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>DQN v0.1 — information flow</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&family=STIX+Two+Text:ital@0;1&display=swap" rel="stylesheet">
+<style>
+:root{
+  box-sizing:border-box;
+  padding-top:env(safe-area-inset-top,0px);
+  padding-bottom:env(safe-area-inset-bottom,0px);
+  --paper:#eef3f7; --panel:#ffffff; --ink:#14263a; --muted:#5a6d80; --line:#c9d6e2;
+  --grid:rgba(40,80,120,.07); --fwd:#1b6e8f; --bwd:#b5650a; --good:#2f7d4f; --hi:#fff4c2;
+  --cur:#6b3fa0; --curbg:#ece3f8; --updbg:#dcf0e3;
+  --act:#5f8f22; --learn:#b3363a; --flow:#14263a;
+  --sans:"Atkinson Hyperlegible",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+  --math:"STIX Two Text","Cambria Math","Times New Roman",serif;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --paper:#0f1b27; --panel:#152434; --ink:#e4edf5; --muted:#94a8bb; --line:#2b3f53;
+    --grid:rgba(160,200,240,.05); --fwd:#5cb7d8; --bwd:#eca14a; --good:#6cc28e; --hi:#3a3616;
+    --cur:#b99be6; --curbg:#2d2442; --updbg:#1d3a2a; --act:#9ccc5a; --learn:#f07b7f; --flow:#e4edf5;
+  }
+}
+:root[data-theme="dark"]{
+  --paper:#0f1b27; --panel:#152434; --ink:#e4edf5; --muted:#94a8bb; --line:#2b3f53;
+  --grid:rgba(160,200,240,.05); --fwd:#5cb7d8; --bwd:#eca14a; --good:#6cc28e; --hi:#3a3616;
+  --cur:#b99be6; --curbg:#2d2442; --updbg:#1d3a2a; --act:#9ccc5a; --learn:#f07b7f; --flow:#e4edf5;
+}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+*,*::before,*::after{box-sizing:inherit}
+body{
+  margin:0; color:var(--ink); font-family:var(--sans); font-size:17px; line-height:1.5;
+  background-color:var(--paper);
+  background-image:linear-gradient(var(--grid) 1px,transparent 1px),linear-gradient(90deg,var(--grid) 1px,transparent 1px);
+  background-size:24px 24px;
+}
+main{max-width:1080px; margin:0 auto; padding:28px 20px 48px}
+h1{font-size:2rem; line-height:1.15; margin:0 0 .5rem; letter-spacing:-.01em}
+h2{font-size:1.1rem; margin:0 0 .6rem}
+p{margin:.4rem 0}
+.lede{max-width:72ch}
+.note{max-width:72ch; color:var(--muted); font-size:.93rem}
+.mx{font-family:var(--math); font-size:1.1em; white-space:nowrap; font-weight:400}
+.mx i{font-style:italic}
+.f{color:var(--fwd); font-weight:700}
+.b{color:var(--bwd); font-weight:700}
+.ga{color:var(--act); font-weight:700}
+.rl{color:var(--learn); font-weight:700}
+.panel{background:var(--panel); border:1px solid var(--line); border-radius:10px; padding:16px 18px}
+
+.eq{margin-top:18px; font-family:var(--math); font-size:1.18rem; padding:12px 18px; overflow-x:auto}
+.eq .row{white-space:nowrap; padding:3px 0}
+.eq .q{color:var(--muted)}
+.eq .res{font-weight:700; color:var(--learn)}
+.eq i{font-style:italic}
+
+.schem{margin:12px 0 14px; padding:6px; overflow-x:auto}
+.schem svg{width:100%; min-width:720px; height:auto; display:block}
+.box{fill:var(--panel); stroke:var(--flow); stroke-width:2}
+.box.lbox{stroke:var(--learn)}
+.box.on{stroke-width:3.5; fill:var(--hi)}
+.bt{font:15px var(--sans); fill:var(--ink)}
+.bt .mv{font-family:var(--math); font-style:italic}
+.bv{font:700 15px var(--math); fill:var(--ink)}
+.tag{font:14px var(--math); fill:var(--ink)}
+.tag.g{fill:var(--act)} .tag.r{fill:var(--learn)}
+.path{fill:none; stroke-width:2.2; transition:stroke-width .2s}
+.path.g{stroke:var(--act)} .path.k{stroke:var(--flow)} .path.r{stroke:var(--learn)}
+.path.on{stroke-width:4.5}
+.region{fill:none; stroke:var(--flow); stroke-width:2; stroke-dasharray:9 7}
+.rlabel{font:700 22px var(--sans); fill:var(--ink)}
+.edge{stroke:var(--muted); transition:stroke .3s, opacity .3s}
+.edge.hot{stroke:var(--ink)}
+.edge.upd{stroke:var(--learn)}
+.node{fill:var(--panel); stroke:var(--ink); stroke-width:1.3}
+.minit{fill:var(--panel); stroke:var(--muted); stroke-width:1}
+.minit.cur{fill:var(--cur); stroke:var(--cur)}
+.pkt circle{stroke:var(--panel); stroke-width:2}
+.pkt rect{fill:var(--panel); stroke-width:1.5}
+.pkt text{font:14px var(--math); text-anchor:middle}
+
+.controls{display:flex; flex-wrap:wrap; gap:10px 14px; align-items:center; margin:14px 0}
+button{font:700 .95rem var(--sans); color:var(--ink); background:var(--panel); border:1.5px solid var(--ink); border-radius:8px; padding:8px 14px; cursor:pointer}
+button.primary{background:var(--ink); color:var(--panel)}
+button:focus-visible,input:focus-visible,summary:focus-visible{outline:3px solid var(--fwd); outline-offset:2px}
+.stats{color:var(--muted); font-size:.95rem; font-variant-numeric:tabular-nums}
+.stats b{color:var(--ink)}
+.kbd{font-size:.85rem; color:var(--muted)}
+
+.qcenter{max-width:640px; margin:0 auto}
+.qcenter h2{text-align:center}
+.tablewrap{overflow-x:auto}
+table{border-collapse:collapse; width:100%; font-variant-numeric:tabular-nums}
+th,td{white-space:nowrap; padding:7px 8px; border-bottom:1px solid var(--line); text-align:center}
+th{font-size:.85rem; color:var(--muted); font-weight:700}
+th:first-child,td:first-child{text-align:left}
+td.qc{font-weight:700}
+.rowh{color:var(--muted)}
+th.cur{background:var(--cur); color:var(--panel); border-radius:6px 6px 0 0}
+td.cur{background:var(--curbg)!important; color:var(--cur)}
+td.upd{background:var(--updbg)!important; color:var(--good); box-shadow:inset 0 0 0 2px var(--good)}
+tr.sep td{border-top:2px solid var(--line)}
+td.star{color:var(--muted); font-weight:400}
+.hide-star .star{display:none}
+.legend{display:flex; flex-wrap:wrap; justify-content:center; gap:6px 16px; font-size:.88rem; color:var(--muted); margin-top:10px}
+.legend .sw{display:inline-block; width:14px; height:14px; border-radius:3px; vertical-align:-2px; margin-right:6px}
+
+.fold{margin-top:16px}
+.fold summary{font-weight:700; font-size:1.1rem; cursor:pointer}
+.fold[open] summary{margin-bottom:10px}
+ol.stages{list-style:none; margin:0; padding:0; counter-reset:st}
+ol.stages li{counter-increment:st; position:relative; padding:8px 10px 8px 44px; border-radius:8px; color:var(--muted); margin-bottom:4px}
+ol.stages li::before{content:counter(st); position:absolute; left:10px; top:8px; width:24px; height:24px; border-radius:50%;
+  border:1.5px solid var(--line); display:grid; place-items:center; font-weight:700; font-size:.85rem}
+ol.stages li b{color:var(--ink)}
+ol.stages li.done{color:var(--ink)}
+ol.stages li.done::before{background:var(--line)}
+ol.stages li.now{background:var(--hi); color:var(--ink)}
+ol.stages li.now::before{background:var(--ink); color:var(--panel); border-color:var(--ink)}
+.params{display:grid; grid-template-columns:repeat(auto-fit,minmax(190px,1fr)); gap:10px 18px}
+.params label{display:flex; flex-direction:column; font-size:.9rem; color:var(--muted)}
+.params .lt b{color:var(--ink)}
+input[type=range]{width:100%; accent-color:var(--fwd)}
+input[type=number]{font:inherit; color:var(--ink); background:var(--panel); border:1px solid var(--line); border-radius:6px; padding:4px 6px; width:100%}
+.check{flex-direction:row!important; align-items:flex-start; gap:8px; color:var(--ink)!important}
+@media (prefers-reduced-motion: reduce){ .path,.edge{transition:none} }
+
+.eq .t{padding:1px 3px; border-radius:4px; transition:background .3s}
+.eq .t.on{background:var(--hi); box-shadow:0 0 0 2px var(--learn)}
+.caption{display:flex; gap:12px; align-items:baseline; padding:12px 18px; margin-top:-4px}
+.caption .n{font-weight:700; white-space:nowrap}
+.caption .d{color:var(--ink)}
+.edge.hot{stroke:var(--act)}
+.stepper{display:flex; flex-wrap:wrap; align-items:center; gap:10px 14px; margin:12px 0 0}
+.stepper .pos{font-weight:700; min-width:8.5em; text-align:center; font-variant-numeric:tabular-nums}
+button:disabled{opacity:.4; cursor:default}
+.stagebar{display:flex; flex-wrap:wrap; gap:8px; margin:12px 0 0}
+.stagebar button{font-weight:400; border-color:var(--line); padding:7px 12px}
+.stagebar button b{margin-right:6px}
+.stagebar button.now{background:var(--hi); border-color:var(--ink); font-weight:700}
+.stagebar button.done{border-color:var(--ink)}
+.node.hot{fill:var(--act)}
+.node.out.hot{fill:var(--learn)}
+</style>
+</head>
+<body>
+<main>
+  <h1>DQN v0.1: information flow</h1>
+  <p class="lede">When states are too many for a Q-table, DQN uses a neural network <span class="mx"><i>Q̂</i>(<i>s</i>, <i>a</i>; <i>w</i>)</span> that outputs a value for every action, trained on the Q-learning target as a squared loss.</p>
+
+  <div class="panel eq">
+    <div class="row"><span class="t" id="tL"><i>ℒ<sub>i</sub></i></span> = [ <span class="t" id="tR"><i>r<sub>i</sub></i></span> + <i>γ</i> <span class="t" id="t2">max<sub><i>a</i></sub> <i>Q̂</i>(<i>s</i><sub><i>i</i>+1</sub>, <i>a</i>; <i>w</i>)</span> − <span class="t" id="t1"><i>Q̂</i>(<i>s<sub>i</sub></i>, <i>a<sub>i</sub></i>; <i>w</i>)</span> ]<sup>2</sup>
+      &nbsp;&nbsp;&nbsp;&nbsp; <span class="t" id="tW"><i>w</i> ← <i>w</i> − <i>η</i> ∇<sub><i>w</i></sub> <i>ℒ<sub>i</sub></i></span></div>
+  </div>
+
+  <div class="panel schem">
+    <svg id="svg" viewBox="30 0 870 548" role="img" aria-label="DQN v0.1 schematic: environment, transition, Q-network, policy and loss">
+      <defs>
+        <marker id="aG" viewBox="0 0 10 10" refX="8" refY="5" markerUnits="userSpaceOnUse" markerWidth="12" markerHeight="12" orient="auto"><path d="M0,0 L10,5 L0,10 z" style="fill:var(--act)"/></marker>
+        <marker id="aK" viewBox="0 0 10 10" refX="8" refY="5" markerUnits="userSpaceOnUse" markerWidth="12" markerHeight="12" orient="auto"><path d="M0,0 L10,5 L0,10 z" style="fill:var(--flow)"/></marker>
+        <marker id="aR" viewBox="0 0 10 10" refX="8" refY="5" markerUnits="userSpaceOnUse" markerWidth="12" markerHeight="12" orient="auto"><path d="M0,0 L10,5 L0,10 z" style="fill:var(--learn)"/></marker>
+      </defs>
+
+      <rect class="region" x="40" y="192" width="850" height="345" rx="34"/>
+      <text class="rlabel" x="96" y="512">DQN v0.1</text>
+
+      <!-- paths -->
+      <path id="pPiEnv"  class="path g" d="M783,213 L783,32 L544,32" marker-end="url(#aG)"/>
+      <path id="pEnvS"   class="path g" d="M398,32 L188,32 L188,51" marker-end="url(#aG)"/>
+      <path id="pNextNN" class="path g" d="M188,180 L188,268 L372,268" marker-end="url(#aG)"/>
+      <path id="pSNN"    class="path k" d="M118,72 L96,72 L96,290 L372,290" marker-end="url(#aK)"/>
+      <path id="pNsNN"   class="path k" d="M118,166 L96,166 L96,290 L372,290"/>
+      <path id="pNNPi"   class="path g" d="M540,268 L783,268 L783,256" marker-end="url(#aG)"/>
+      <path id="pNNL"    class="path r" d="M540,290 L615,290 L615,462 L536,462" marker-end="url(#aR)"/>
+      <path id="pRL"     class="path r" d="M118,125 L72,125 L72,462 L381,462" marker-end="url(#aR)"/>
+      <path id="pLNN"    class="path r" d="M458,438 L458,350" marker-end="url(#aR)"/>
+
+      <!-- ENV -->
+      <rect id="bEnv" class="box" x="400" y="10" width="140" height="44" rx="10"/>
+      <text class="bt" x="470" y="38" text-anchor="middle" style="font-weight:700;font-size:18px">ENV</text>
+
+      <!-- transition boxes -->
+      <rect id="bSA" class="box" x="120" y="51" width="176" height="46"/>
+      <text class="bt" x="128" y="70">State (<tspan class="mv">s</tspan><tspan class="mv" font-size="11" dy="4">t</tspan><tspan dy="-4">)</tspan></text>
+      <text class="bt" x="128" y="90">Action (<tspan class="mv">a</tspan><tspan class="mv" font-size="11" dy="4">t</tspan><tspan dy="-4">)</tspan></text>
+
+      <rect id="bR" class="box" x="120" y="111" width="176" height="28"/>
+      <text class="bt" x="128" y="130">Reward (<tspan class="mv">r</tspan><tspan class="mv" font-size="11" dy="4">t</tspan><tspan dy="-4">)</tspan></text>
+
+      <rect id="bNs" class="box" x="120" y="152" width="176" height="28"/>
+      <text class="bt" x="128" y="171">Next State (<tspan class="mv">s</tspan><tspan class="mv" font-size="11" dy="4">t+1</tspan><tspan dy="-4">)</tspan></text>
+
+      <!-- network -->
+      <g id="net"></g>
+      <text class="tag" x="206" y="284">two passes: <tspan font-style="italic">s</tspan><tspan font-style="italic" font-size="11" dy="4">i</tspan><tspan dy="-4">, </tspan><tspan font-style="italic">s</tspan><tspan font-style="italic" font-size="11" dy="4">i+1</tspan></text>
+
+      <!-- policy -->
+      <rect id="bPi" class="box" x="710" y="215" width="146" height="40" rx="8"/>
+      <text class="tag" x="783" y="241" text-anchor="middle" style="font-size:20px;font-style:italic">π</text>
+      <text class="tag" x="596" y="207"><tspan font-style="italic">a</tspan><tspan font-style="italic" font-size="11" dy="4">t</tspan><tspan dy="-4"> = ε-greedy  argmax</tspan><tspan font-style="italic" font-size="11" dy="4">a</tspan><tspan dy="-4"> </tspan><tspan font-style="italic">Q̂</tspan>(<tspan font-style="italic">s</tspan><tspan font-style="italic" font-size="11" dy="4">t</tspan><tspan dy="-4">, </tspan><tspan font-style="italic">a</tspan>; <tspan font-style="italic">w</tspan>)</text>
+      <text class="tag g" x="660" y="24"><tspan>action (</tspan><tspan font-style="italic">a</tspan><tspan font-style="italic" font-size="11" dy="4">t</tspan><tspan dy="-4">)</tspan></text>
+
+      <!-- red labels -->
+      <text class="tag r" x="624" y="372"><tspan font-style="italic">Q̂</tspan>(<tspan font-style="italic">s</tspan><tspan font-style="italic" font-size="11" dy="4">i</tspan><tspan dy="-4">, </tspan><tspan font-style="italic">a</tspan><tspan font-style="italic" font-size="11" dy="4">i</tspan><tspan dy="-4">; </tspan><tspan font-style="italic">w</tspan>)  ①</text>
+      <text class="tag r" x="624" y="418">max<tspan font-style="italic" font-size="11" dy="4">a</tspan><tspan dy="-4"> </tspan><tspan font-style="italic">Q̂</tspan>(<tspan font-style="italic">s</tspan><tspan font-style="italic" font-size="11" dy="4">i+1</tspan><tspan dy="-4">, </tspan><tspan font-style="italic">a</tspan>; <tspan font-style="italic">w</tspan>)  ②</text>
+      <text class="tag r" x="0" y="0" transform="translate(450,420) rotate(-90)">update <tspan font-style="italic">w</tspan></text>
+
+      <!-- loss -->
+      <rect id="bL" class="box lbox" x="383" y="440" width="152" height="44" rx="10"/>
+      <text class="tag r" x="400" y="467" style="font-size:19px;font-style:italic">ℒ</text>
+      <text class="tag r" x="320" y="512"><tspan font-style="italic">ℒ</tspan><tspan font-style="italic" font-size="11" dy="4">i</tspan><tspan dy="-4"> = [ </tspan><tspan font-style="italic">r</tspan><tspan font-style="italic" font-size="11" dy="4">i</tspan><tspan dy="-4"> + </tspan><tspan font-style="italic">γ</tspan><tspan> max </tspan><tspan font-style="italic">Q̂</tspan>(<tspan font-style="italic">s</tspan><tspan font-style="italic" font-size="11" dy="4">i+1</tspan><tspan dy="-4">, </tspan><tspan font-style="italic">a</tspan>; <tspan font-style="italic">w</tspan>) ② − <tspan font-style="italic">Q̂</tspan>(<tspan font-style="italic">s</tspan><tspan font-style="italic" font-size="11" dy="4">i</tspan><tspan dy="-4">, </tspan><tspan font-style="italic">a</tspan><tspan font-style="italic" font-size="11" dy="4">i</tspan><tspan dy="-4">; </tspan><tspan font-style="italic">w</tspan>) ① ]²</text>
+
+      <g id="pkts"></g>
+    </svg>
+  </div>
+  <div class="panel caption" aria-live="polite"><span class="n" id="capN">Ready</span><span class="d" id="capD">Press “Next ▶” to follow one transition through DQN.</span></div>
+
+  <div class="stepper">
+    <button id="bPrev" aria-label="Previous stage">◀ Previous</button>
+    <span class="pos" id="pos">Stage – of 6</span>
+    <button id="bNext" class="primary" aria-label="Next stage">Next ▶</button>
+    <button id="bAgain">Replay this stage</button>
+  </div>
+  <div class="stagebar" id="stagebar" role="group" aria-label="Jump to a stage"></div>
+
+  <div class="controls">
+    <button id="bStep">Play one step</button>
+    <button id="bPlay">Play</button>
+    <button id="bReset">Reset</button>
+    <span class="stats" id="stats"></span>
+  </div>
+  <p class="kbd">Keyboard: Space or → for next stage, ← for previous, S to play one full step, P to play or pause.</p>
+
+  <details class="panel fold">
+    <summary>Settings</summary>
+    <div class="params">
+      <label><span class="lt">Travel time per arrow = <b id="vS"></b></span><input type="range" id="pS" min="200" max="2500" step="50" value="900"></label>
+    </div>
+  </details>
+</main>
+
+<script>
+(function(){
+const $=id=>document.getElementById(id);
+const reduce=window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+const P={dur:900};
+let queued=false,t=0,phase=-1,playing=false,busy=false,skip=false,token=0;
+
+const ST=[
+ {n:'Act',d:'The current state <span class="mx"><i>s<sub>t</sub></i></span> goes into the network, which returns <span class="mx"><i>Q̂</i>(<i>s<sub>t</sub></i>, <i>a</i>; <i>w</i>)</span> for every action. The policy <span class="mx"><i>π</i></span> picks <span class="mx"><i>a<sub>t</sub></i></span>: usually the largest, at random with probability <span class="mx"><i>ε</i></span>.', eq:[]},
+ {n:'Environment responds',d:'ENV applies <span class="mx"><i>a<sub>t</sub></i></span> and returns the reward <span class="mx"><i>r<sub>t</sub></i></span> and the next state <span class="mx"><i>s<sub>t+1</sub></i></span>. The tuple <span class="mx">(<i>s<sub>t</sub></i>, <i>a<sub>t</sub></i>, <i>r<sub>t</sub></i>, <i>s<sub>t+1</sub></i>)</span> is the training sample <span class="mx"><i>i</i></span>.', eq:[]},
+ {n:'Pass 1',d:'Feed <span class="mx"><i>s<sub>i</sub></i></span> through the network and keep only the output of the action actually taken: <span class="mx"><i>Q̂</i>(<i>s<sub>i</sub></i>, <i>a<sub>i</sub></i>; <i>w</i>)</span> ①. This is the prediction.', eq:['t1']},
+ {n:'Pass 2',d:'Feed <span class="mx"><i>s<sub>i+1</sub></i></span> through the <b>same</b> network and take the largest output: <span class="mx">max<sub><i>a</i></sub> <i>Q̂</i>(<i>s<sub>i+1</sub></i>, <i>a</i>; <i>w</i>)</span> ②. This is the bootstrap part of the target.', eq:['t2']},
+ {n:'Form the loss',d:'Combine the reward with ② to get the target <span class="mx"><i>r<sub>i</sub></i> + <i>γ</i>·②</span>, and compare it with the prediction ①: <span class="mx"><i>ℒ<sub>i</sub></i></span> is the squared difference.', eq:['tR','t1','t2','tL']},
+ {n:'Update the weights',d:'Backpropagate <span class="mx">∇<sub><i>w</i></sub><i>ℒ<sub>i</sub></i></span> and take a gradient step. Because the target also used <span class="mx"><i>w</i></span>, it moves as well; later versions freeze it in a separate target network. Then <span class="mx"><i>s<sub>t+1</sub></i></span> becomes the new state and the loop repeats.', eq:['tW']}
+];
+$('stagebar').innerHTML=ST.map((s,i)=>`<button data-k="${i}"><b>${i+1}</b>${s.n}</button>`).join('');
+
+
+/* network drawing */
+const NX=[392,456,520], NI=4, NH=10, NO=3;
+const iy=i=>234+i*22, hy=j=>202+j*14, oy=k=>238+k*26;
+function drawNet(mode){ // mode: null | 'fwd' | 'upd'
+  let e='';
+  for(let j=0;j<NH;j++)for(let i=0;i<NI;i++)e+=`<line class="edge${mode==='fwd'?' hot':mode==='upd'?' upd':''}" x1="${NX[0]}" y1="${iy(i)}" x2="${NX[1]}" y2="${hy(j)}" stroke-width="${mode?1.1:.7}" opacity="${mode?.8:.35}"/>`;
+  for(let k=0;k<NO;k++)for(let j=0;j<NH;j++)e+=`<line class="edge${mode==='fwd'?' hot':mode==='upd'?' upd':''}" x1="${NX[1]}" y1="${hy(j)}" x2="${NX[2]}" y2="${oy(k)}" stroke-width="${mode?1.1:.7}" opacity="${mode?.8:.35}"/>`;
+  let n='';
+  for(let i=0;i<NI;i++)n+=`<circle class="node${mode==='fwd'?' hot':''}" cx="${NX[0]}" cy="${iy(i)}" r="6"/>`;
+  for(let j=0;j<NH;j++)n+=`<circle class="node${mode==='fwd'?' hot':''}" cx="${NX[1]}" cy="${hy(j)}" r="4.5"/>`;
+  for(let k=0;k<NO;k++)n+=`<circle class="node out${mode==='fwd'?' hot':''}" cx="${NX[2]}" cy="${oy(k)}" r="7"/><text class="tag" x="${NX[2]+11}" y="${oy(k)-7}" style="font-size:12px;font-style:italic">a<tspan font-size="9" dy="3">${k+1}</tspan></text>`;
+  n+=`<text class="tag" x="${NX[0]}" y="${iy(NI-1)+26}" text-anchor="middle" style="font-size:12px;font-style:italic">s</text>`;
+  n+=`<text class="tag" x="${NX[1]}" y="${hy(NH-1)+22}" text-anchor="middle" style="font-size:12px;font-style:italic">w</text>`;
+  $('net').innerHTML=e+n;
+}
+
+/* animation */
+const sleep=ms=>new Promise(r=>setTimeout(r,ms));
+function move(pid,label,cls){
+  return new Promise(res=>{
+    const my=token,path=$(pid),len=path.getTotalLength();
+    const col=cls==='g'?'var(--act)':cls==='r'?'var(--learn)':'var(--flow)';
+    const g=document.createElementNS('http://www.w3.org/2000/svg','g'); g.setAttribute('class','pkt');
+    const w=Math.max(30,label.replace(/<[^>]+>/g,'').length*8+16);
+    g.innerHTML=`<circle r="7" style="fill:${col}"/><rect x="${-w/2}" y="-33" width="${w}" height="23" rx="6" style="stroke:${col}"/><text y="-16" style="fill:${col};font-style:italic">${label}</text>`;
+    $('pkts').appendChild(g); path.classList.add('on');
+    const D=(reduce||skip)?0:P.dur, t0=performance.now();
+    const fr=now=>{
+      if(my!==token){g.remove();path.classList.remove('on');res();return;}
+      const k=(D===0||skip)?1:Math.min(1,(now-t0)/D), e=k<.5?2*k*k:1-Math.pow(-2*k+2,2)/2;
+      const pt=path.getPointAtLength(len*e); g.setAttribute('transform',`translate(${pt.x},${pt.y})`);
+      if(k<1)requestAnimationFrame(fr); else setTimeout(()=>{g.remove();path.classList.remove('on');res();},D?200:0);
+    };
+    requestAnimationFrame(fr);
+  });
+}
+const sub=(b,s)=>`${b}<tspan font-size="10" dy="4">${s}</tspan><tspan dy="-4"></tspan>`;
+function boxes(ids){['bEnv','bSA','bR','bNs','bPi','bL'].forEach(id=>$(id).classList.toggle('on',ids.includes(id)));}
+async function animate(ph){
+  if(ph===0){ boxes(['bNs']); await move('pNextNN',sub('s','t'),'g'); drawNet('fwd'); boxes(['bPi']); await move('pNNPi',`Q̂(${sub('s','t')}, ·)`,'g'); await move('pPiEnv',sub('a','t'),'g'); drawNet(null); }
+  if(ph===1){ boxes(['bEnv']); await move('pEnvS',`${sub('r','t')}, ${sub('s','t+1')}`,'g'); boxes(['bSA','bR','bNs']); }
+  if(ph===2){ boxes(['bSA']); await move('pSNN',sub('s','i'),'k'); drawNet('fwd'); await move('pNNL','① '+`Q̂(${sub('s','i')}, ${sub('a','i')})`,'r'); drawNet(null); boxes(['bL']); }
+  if(ph===3){ boxes(['bNs']); await move('pNsNN',sub('s','i+1'),'k'); drawNet('fwd'); await move('pNNL','② max Q̂',"r"); drawNet(null); boxes(['bL']); }
+  if(ph===4){ boxes(['bR']); await move('pRL',sub('r','i'),'r'); boxes(['bL']); }
+  if(ph===5){ boxes(['bL']); await move('pLNN','∇w','r'); drawNet('upd'); await sleep(skip||reduce?0:P.dur*.6); drawNet(null); boxes([]); }
+}
+function show(){
+  [...$('stagebar').children].forEach((el,i)=>el.className=phase<0?'':(i<phase?'done':i===phase?'now':''));
+  ['tL','tR','t1','t2','tW'].forEach(id=>$(id).classList.remove('on'));
+  if(phase>=0){ ST[phase].eq.forEach(id=>$(id).classList.add('on')); $('capN').textContent=`${phase+1} / 6 · ${ST[phase].n}`; $('capD').innerHTML=ST[phase].d; }
+  else { $('capN').textContent='Ready'; $('capD').innerHTML='Press “Next ▶” to follow one transition through DQN.'; }
+  $('pos').textContent=phase<0?'Stage – of 6':`Stage ${phase+1} of 6`; $('bPrev').disabled=phase<=0&&t===0; $('bAgain').disabled=phase<0;
+  $('stats').innerHTML=`Time step <span class="mx"><i>t</i> = ${t}</span>`;
+}
+async function stage(){
+  if(busy){skip=true;queued=true;return;}
+  busy=true; skip=false; const my=token;
+  if(phase===5||phase===-1){ if(phase===5)t++; phase=0; } else phase++;
+  show(); await animate(phase);
+  busy=false; skip=false; if(my!==token)return;
+  if(queued){queued=false; await stage();}
+}
+function stopAll(){token++;queued=false;playing=false;busy=false;skip=false;$('bPlay').textContent='Play';$('bStep').textContent='Play one step';$('pkts').innerHTML='';document.querySelectorAll('.path.on').forEach(e=>e.classList.remove('on'));drawNet(null);}
+async function play(){
+  if(playing){stopAll();return;}
+  stopAll(); playing=true; $('bPlay').textContent='Pause'; const my=token;
+  while(playing&&my===token){await stage(); await sleep(reduce?400:Math.max(250,P.dur*.5));}
+}
+async function playStep(){
+  stopAll(); const my=token; $('bStep').textContent='Playing…';
+  do{await stage(); if(my!==token)return; if(phase!==5)await sleep(reduce?300:Math.max(200,P.dur*.35));}while(phase!==5);
+  $('bStep').textContent='Play one step';
+}
+function reset(){stopAll();t=0;phase=-1;boxes([]);show();}
+
+const sp=$('pS'),su=()=>{P.dur=+sp.value;$('vS').textContent=P.dur+' ms';};sp.addEventListener('input',su);su();
+$('stagebar').addEventListener('click',e=>{const b=e.target.closest('button');if(!b)return;stopAll();phase=(+b.dataset.k)-1;stage();});
+function goTo(k){stopAll();phase=k-1;stage();}
+$('bNext').onclick=()=>{if(playing)stopAll();stage();};
+$('bPrev').onclick=()=>{ if(phase>0)goTo(phase-1); else if(phase===0&&t>0){t--;goTo(5);} };
+$('bAgain').onclick=()=>{ if(phase>=0){const k=phase; if(k===0){stopAll();phase=-1;stage();} else goTo(k);} };
+$('bStep').onclick=playStep; $('bPlay').onclick=play; $('bReset').onclick=reset;
+document.addEventListener('keydown',e=>{
+  if(['INPUT','BUTTON','SUMMARY'].includes(e.target.tagName))return;
+  if(e.code==='Space'||e.key==='ArrowRight'){e.preventDefault();if(playing)stopAll();stage();}
+  else if(e.key==='ArrowLeft'){e.preventDefault();$('bPrev').click();}
+  else if(e.key==='s'||e.key==='S')playStep();
+  else if(e.key==='p'||e.key==='P')play();
+});
+drawNet(null); reset();
+})();
+</script>
+</body>
+</html>
