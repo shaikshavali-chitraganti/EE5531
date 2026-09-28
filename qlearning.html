@@ -1,0 +1,411 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Q-learning, step by step — five-tile grid</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&family=STIX+Two+Text:ital@0;1&display=swap" rel="stylesheet">
+<style>
+:root{
+  box-sizing:border-box;
+  padding-top:env(safe-area-inset-top,0px);
+  padding-bottom:env(safe-area-inset-bottom,0px);
+  --paper:#eef3f7; --panel:#ffffff; --ink:#14263a; --muted:#5a6d80; --line:#c9d6e2;
+  --grid:rgba(40,80,120,.07); --fwd:#1b6e8f; --bwd:#b5650a; --good:#2f7d4f; --hi:#fff4c2; --cur:#6b3fa0; --curbg:#ece3f8; --updbg:#dcf0e3;
+  --sans:"Atkinson Hyperlegible",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+  --math:"STIX Two Text","Cambria Math","Times New Roman",serif;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --paper:#0f1b27; --panel:#152434; --ink:#e4edf5; --muted:#94a8bb; --line:#2b3f53;
+    --grid:rgba(160,200,240,.05); --fwd:#5cb7d8; --bwd:#eca14a; --good:#6cc28e; --hi:#3a3616; --cur:#b99be6; --curbg:#2d2442; --updbg:#1d3a2a;
+  }
+}
+:root[data-theme="dark"]{
+  --paper:#0f1b27; --panel:#152434; --ink:#e4edf5; --muted:#94a8bb; --line:#2b3f53;
+  --grid:rgba(160,200,240,.05); --fwd:#5cb7d8; --bwd:#eca14a; --good:#6cc28e; --hi:#3a3616; --cur:#b99be6; --curbg:#2d2442; --updbg:#1d3a2a;
+}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+*,*::before,*::after{box-sizing:inherit}
+body{
+  margin:0; color:var(--ink); font-family:var(--sans); font-size:17px; line-height:1.5;
+  background-color:var(--paper);
+  background-image:linear-gradient(var(--grid) 1px,transparent 1px),linear-gradient(90deg,var(--grid) 1px,transparent 1px);
+  background-size:24px 24px;
+}
+main{max-width:1080px; margin:0 auto; padding:28px 20px 48px}
+h1{font-size:2rem; line-height:1.15; margin:0 0 .5rem; font-weight:700; letter-spacing:-.01em}
+h2{font-size:1.1rem; margin:0 0 .6rem}
+p{margin:.4rem 0}
+.lede{max-width:70ch; color:var(--ink)}
+.note{max-width:70ch; color:var(--muted); font-size:.93rem}
+.m{font-family:var(--math); font-style:italic; font-size:1.08em}
+.mx{font-family:var(--math); font-size:1.1em; white-space:nowrap; font-weight:400}
+.mx i{font-style:italic}
+.mx .f,.mx .b{font-family:var(--math)}
+.f{color:var(--fwd); font-weight:700}
+.b{color:var(--bwd); font-weight:700}
+.panel{background:var(--panel); border:1px solid var(--line); border-radius:10px; padding:16px 18px}
+.track{margin:12px 0 14px; padding:4px 6px}
+.track svg{width:100%; height:auto; display:block; overflow:visible}
+.tile{fill:var(--panel); stroke:var(--line); stroke-width:1.5}
+.tile.cur{stroke:var(--ink); stroke-width:2.5}
+.wall{fill:var(--muted)}
+.tnum{font:700 15px var(--sans); fill:var(--ink); text-anchor:middle}
+.rtag{font:700 11.5px var(--sans); text-anchor:middle}
+.greedy{font:700 20px var(--sans); text-anchor:middle}
+.glabel{font:13px var(--sans); fill:var(--muted)}
+#agent{transition:transform .45s cubic-bezier(.3,.7,.3,1)}
+#agent circle{fill:var(--ink)}
+#agent.bump{animation:bump .45s}
+@keyframes bump{30%{transform:var(--x) translateX(18px)} }
+.arrow{fill:none; stroke-width:3; stroke-linecap:round; transition:opacity .3s}
+.pop{font:700 22px var(--sans); text-anchor:middle; opacity:0}
+.pop.show{animation:pop 1.2s forwards}
+@keyframes pop{0%{opacity:0; transform:translateY(8px)} 25%{opacity:1; transform:translateY(0)} 80%{opacity:1} 100%{opacity:0; transform:translateY(-10px)}}
+
+.grid2{display:grid; grid-template-columns:1.1fr 1fr; gap:16px}
+.grid2>*{min-width:0}
+@media (max-width:820px){.grid2{grid-template-columns:1fr}}
+ol.stages{list-style:none; margin:0; padding:0; counter-reset:st}
+ol.stages li{counter-increment:st; position:relative; padding:8px 10px 8px 44px; border-radius:8px; color:var(--muted); margin-bottom:4px}
+ol.stages li::before{content:counter(st); position:absolute; left:10px; top:8px; width:24px; height:24px; border-radius:50%;
+  border:1.5px solid var(--line); display:grid; place-items:center; font-weight:700; font-size:.85rem}
+ol.stages li b{color:var(--ink)}
+ol.stages li.done{color:var(--ink)}
+ol.stages li.done::before{background:var(--line)}
+ol.stages li.now{background:var(--hi); color:var(--ink)}
+ol.stages li.now::before{background:var(--ink); color:var(--panel); border-color:var(--ink)}
+.eq{margin-top:12px; padding:12px; border-top:1px solid var(--line); font-family:var(--math); font-size:1.1rem; overflow-x:auto}
+.eqtop{margin-top:20px; border-top:1px solid var(--line); font-size:1.2rem; padding:12px 18px}
+.eq .row{white-space:nowrap; padding:3px 0}
+.eq .q{color:var(--muted)}
+.eq .res{font-weight:700; color:var(--good)}
+
+.tablewrap{overflow-x:auto}
+table{border-collapse:collapse; width:100%; font-variant-numeric:tabular-nums}
+th,td{white-space:nowrap; padding:7px 8px; text-align:right; border-bottom:1px solid var(--line)}
+th{white-space:nowrap; font-size:.85rem; color:var(--muted); font-weight:700}
+th:first-child,td:first-child{text-align:left}
+td.qc{font-weight:700}
+.qm th,.qm td{text-align:center}
+.qm th:first-child,.qm td:first-child{text-align:left}
+.qm th.cur{background:var(--cur); color:var(--panel); border-radius:6px 6px 0 0}
+.qm td.cur{background:var(--curbg)!important; color:var(--cur)}
+.qm td.upd{background:var(--updbg)!important; color:var(--good); box-shadow:inset 0 0 0 2px var(--good)}
+.legend{display:flex; flex-wrap:wrap; gap:6px 16px; font-size:.88rem; color:var(--muted); margin-top:10px}
+.legend .sw{display:inline-block; width:14px; height:14px; border-radius:3px; vertical-align:-2px; margin-right:6px}
+.qm tr.sep td{border-top:2px solid var(--line)}
+.qm .rowh{color:var(--muted)}
+td.star{color:var(--muted)}
+td.flash{animation:flash 1s}
+@keyframes flash{0%{outline:3px solid var(--good); outline-offset:-3px}100%{outline:3px solid transparent; outline-offset:-3px}}
+.hide-star .star{display:none}
+
+.controls{display:flex; flex-wrap:wrap; gap:10px 14px; align-items:center; margin:16px 0}
+button{font:700 .95rem var(--sans); color:var(--ink); background:var(--panel); border:1.5px solid var(--ink); border-radius:8px; padding:8px 14px; cursor:pointer}
+button.primary{background:var(--ink); color:var(--panel)}
+button:focus-visible,input:focus-visible{outline:3px solid var(--fwd); outline-offset:2px}
+.fold summary{font-weight:700; font-size:1.1rem; cursor:pointer}
+.fold[open] summary{margin-bottom:10px}
+.fold{align-self:start}
+.qcenter{max-width:640px; margin:0 auto}
+.stepsbox{margin-top:16px}
+.qcenter h2{text-align:center}
+.qcenter .legend{justify-content:center}
+.params{display:grid; grid-template-columns:repeat(auto-fit,minmax(180px,1fr)); gap:10px 18px; margin-top:12px}
+.params label{display:flex; flex-direction:column; font-size:.9rem; color:var(--muted)}
+.params label span{color:var(--ink); font-weight:700}
+.params .lt{display:block}
+input[type=range]{width:100%; accent-color:var(--fwd)}
+input[type=number]{font:inherit; color:var(--ink); background:var(--panel); border:1px solid var(--line); border-radius:6px; padding:4px 6px; width:100%}
+.check{flex-direction:row!important; align-items:flex-start; gap:8px}
+.stats{color:var(--muted); font-size:.95rem; font-variant-numeric:tabular-nums}
+.stats b{color:var(--ink)}
+canvas{width:100%; height:180px; display:block}
+.log td,.log th{font-size:.88rem; padding:4px 6px}
+.kbd{font-size:.85rem; color:var(--muted)}
+@media (prefers-reduced-motion: reduce){
+  #agent{transition:none} #agent.bump,.pop.show,td.flash{animation:none} .pop.show{opacity:1}
+}
+</style>
+</head>
+<body>
+<main>
+  <h1>Q-learning on a five-tile corridor</h1>
+  <p class="lede">The agent starts on tile 1 knowing nothing. <span class="f">Right</span> pays nothing until tile 5 (<span class="mx">+10</span>); <span class="b">Left</span> jumps straight to tile 1 for <span class="mx">+2</span>. Q-learning learns, by trial and error, which action is preferable in each state.</p>
+  <p class="note">On tile 5, Right hits the wall; on tile 1, Left stays put. Both count as re-entry (<span class="mx">+10</span>, <span class="mx">+2</span>) unless unticked in Settings.</p>
+
+      <div class="panel eq eqtop" aria-live="polite">
+        <div class="row"><span class="m">Q</span>(<span class="m">s</span>,<span class="m">a</span>) ← <span class="m">Q</span>(<span class="m">s</span>,<span class="m">a</span>) + <span class="m">α</span> [ <span class="m">r</span> + <span class="m">γ</span> max<sub><span class="m">a′</span></sub> <span class="m">Q</span>(<span class="m">s′</span>,<span class="m">a′</span>) − <span class="m">Q</span>(<span class="m">s</span>,<span class="m">a</span>) ]</div>
+        <div class="row" id="eqnum"></div>
+      </div>
+  <div class="panel track">
+    <svg id="svg" viewBox="10 38 542 168" role="img" aria-label="Five tiles in a row with the agent's position">
+      <defs>
+        <marker id="mF" viewBox="0 0 10 10" refX="7" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" style="fill:var(--fwd)"/></marker>
+        <marker id="mB" viewBox="0 0 10 10" refX="7" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" style="fill:var(--bwd)"/></marker>
+      </defs>
+      <rect class="wall" x="16" y="84" width="8" height="92" rx="2"/>
+      <rect class="wall" x="528" y="84" width="8" height="92" rx="2"/>
+      <g id="tiles"></g>
+      <path id="arrow" class="arrow" d="" />
+      <g id="agent"><circle cx="76" cy="152" r="11"/></g>
+      <text id="pop" class="pop" x="0" y="74"></text>
+    </svg>
+  </div>
+
+  <div class="controls">
+    <button id="bStage" class="primary">Next stage</button>
+    <button id="bStep">Play one step</button>
+    <button id="bPlay">Play</button>
+    <button id="b100">Run 100 steps</button>
+    <button id="b1000">Run 1000 steps</button>
+    <button id="bReset">Reset</button>
+    <span class="stats" id="stats"></span>
+  </div>
+  <p class="kbd">Keyboard: Space for next stage, S to play one full step, P to play or pause.</p>
+
+  <section class="panel qcenter">
+      <h2>Q-table</h2>
+      <div class="tablewrap hide-star" id="qwrap">
+        <table class="qm">
+          <thead id="qhead"></thead>
+          <tbody id="qbody"></tbody>
+        </table>
+      </div>
+      <div class="legend"><span><span class="sw" style="background:var(--curbg);box-shadow:inset 0 0 0 2px var(--cur)"></span>Current tile</span><span><span class="sw" style="background:var(--updbg);box-shadow:inset 0 0 0 2px var(--good)"></span>Last updated <span class="mx"><i>Q</i>(<i>s</i>,<i>a</i>)</span></span></div>
+      <p class="note" style="margin-top:10px"><label><input type="checkbox" id="cStar"> Show the true values <span class="mx"><i>Q</i>*</span> (solved exactly by value iteration) for comparison</label></p>
+    </section>
+
+  <details class="panel fold stepsbox">
+      <summary>This step</summary>
+      <ol class="stages" id="stages">
+        <li><b>Choose an action</b> <span></span></li>
+        <li><b>Move</b> <span></span></li>
+        <li><b>Collect the reward</b> <span></span></li>
+        <li><b>Update the Q-value</b> <span></span></li>
+      </ol>
+    </details>
+
+  <details class="panel settings fold" style="margin-top:16px">
+    <summary>Settings</summary>
+    <div class="params">
+      <label><span class="lt" style="font-weight:400;color:var(--muted)">Learning rate <span class="mx"><i>α</i> = <span id="vA"></span></span></span><input type="range" id="pA" min="0.01" max="1" step="0.01" value="0.1"></label>
+      <label><span class="lt" style="font-weight:400;color:var(--muted)">Discount <span class="mx"><i>γ</i> = <span id="vG"></span></span></span><input type="range" id="pG" min="0" max="0.99" step="0.01" value="0.9"></label>
+      <label><span class="lt" style="font-weight:400;color:var(--muted)">Exploration <span class="mx"><i>ε</i> = <span id="vE"></span></span></span><input type="range" id="pE" min="0" max="1" step="0.01" value="0.5"></label>
+      <label><span class="lt" style="font-weight:400;color:var(--muted)">Stage duration when playing = <span id="vS"></span></span><input type="range" id="pS" min="60" max="1500" step="20" value="600"></label>
+      <label>Episode length (steps, 0 = never restart)<input type="number" id="pL" min="0" max="1000" value="0"></label>
+      <label>Random seed<input type="number" id="pR" min="1" max="99999" value="7"></label>
+      <label class="check"><input type="checkbox" id="pW" checked> <span style="font-weight:400;color:var(--ink)">Staying on an end tile counts as entering it again</span></label>
+    </div>
+    <p class="note">Changing <span class="mx"><i>α</i>, <i>γ</i>, <i>ε</i></span> or the wall rule takes effect from the next step. Changing the seed or episode length resets the run.</p>
+  </details>
+
+  </main>
+
+<script>
+(function(){
+const N=5, F=0, B=1, CX=i=>76+i*100;
+const P={alpha:.1,gamma:.9,eps:.5,epLen:0,reentry:true,seed:7,stage:600};
+let lastUpd=null,Q,s,t,ep,epStep,rng,phase,pend,hist,logRows,Qstar,timer=null,lastFlash=null;
+const $=id=>document.getElementById(id);
+const f2=x=>x.toFixed(2);
+const aName=a=>a===F?'<span class="f">Right</span>':'<span class="b">Left</span>';
+const aShort=a=>a===F?'<span class="f">R</span>':'<span class="b">L</span>';
+
+function mulberry32(a){return function(){a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296}}
+
+function envStep(s,a){
+  if(a===F){const bump=s===N-1, s2=Math.min(s+1,N-1); const r=(s2===N-1&&(!bump||P.reentry))?10:0; return{s2,r,bump};}
+  const s2=0; const r=(s!==0||P.reentry)?2:0; return{s2,r,bump:false,stay:s===0};
+}
+function solveQstar(){
+  let q=Array.from({length:N},()=>[0,0]);
+  for(let k=0;k<4000;k++){q=q.map((row,st)=>row.map((_,a)=>{const e=envStep(st,a);return e.r+P.gamma*Math.max(...q[e.s2]);}));}
+  return q;
+}
+function err(){let m=0;for(let i=0;i<N;i++)for(let a=0;a<2;a++)m=Math.max(m,Math.abs(Q[i][a]-Qstar[i][a]));return m;}
+
+function reset(){
+  stop(); rng=mulberry32(P.seed);
+  Q=Array.from({length:N},()=>[0,0]); s=0;t=0;ep=1;epStep=0;phase=-1;pend=null;hist=[];logRows=[];lastFlash=null;lastUpd=null;
+  Qstar=solveQstar(); hist.push(err()); render();
+}
+
+function makeTransition(){
+  const u=rng(); let a,how;
+  if(u<P.eps){a=rng()<.5?F:B;how='explore';}
+  else if(Q[s][F]===Q[s][B]){a=rng()<.5?F:B;how='tie';}
+  else{a=Q[s][F]>Q[s][B]?F:B;how='exploit';}
+  const e=envStep(s,a); const old=Q[s][a]; const qn=[Q[e.s2][F],Q[e.s2][B]]; const maxNext=Math.max(...qn);
+  const target=e.r+P.gamma*maxNext; const nw=old+P.alpha*(target-old);
+  pend={s,a,u,how,...e,old,qn,maxNext,target,nw,alpha:P.alpha,gamma:P.gamma,eps:P.eps,reset:false};
+}
+function applyUpdate(){
+  const p=pend; Q[p.s][p.a]=p.nw; t++; epStep++;
+  hist.push(err()); if(hist.length>60000)hist.splice(1,1);
+  logRows.unshift({t,s:p.s,a:p.a,how:p.how,r:p.r,s2:p.s2,nw:p.nw}); if(logRows.length>12)logRows.pop();
+  s=p.s2;
+  if(P.epLen>0&&epStep>=P.epLen){s=0;ep++;epStep=0;p.reset=true;}
+  lastFlash=[p.s,p.a]; lastUpd=[p.s,p.a];
+}
+function advance(){
+  if(phase===-1||phase===3){makeTransition();phase=0;}else phase++;
+  if(phase===3)applyUpdate();
+  render();
+}
+function runInstant(k){
+  stop();
+  if(phase>=0&&phase<3){applyUpdate();}
+  for(let i=0;i<k;i++){makeTransition();applyUpdate();}
+  phase=-1;pend=null;lastFlash=null;render();
+}
+function play(){ if(timer)return; $('bPlay').textContent='Pause'; const tick=()=>{advance();timer=setTimeout(tick,P.stage);}; tick(); }
+function stop(){ if(timer){clearTimeout(timer);timer=null;} $('bPlay').textContent='Play'; $('bStep').textContent='Play one step'; }
+function playStep(){
+  stop(); $('bStep').textContent='Playing…';
+  const tick=()=>{advance(); if(phase===3){timer=null; $('bStep').textContent='Play one step'; return;} timer=setTimeout(tick,P.stage);};
+  tick();
+}
+
+/* ---------- rendering ---------- */
+function greedyGlyph(i){ if(Q[i][F]===Q[i][B])return{txt:'–',cls:'var(--muted)',word:'tie'}; return Q[i][F]>Q[i][B]?{txt:'→',cls:'var(--fwd)',word:'<span class="f">R</span>'}:{txt:'↩',cls:'var(--bwd)',word:'<span class="b">L</span>'}; }
+
+function renderTrack(){
+  const agentAt=(phase<=0)?(phase===-1?s:pend.s):pend.s2;
+  let g='';
+  for(let i=0;i<N;i++){
+    const x=30+i*100;
+    g+=`<rect class="tile${i===agentAt?' cur':''}" x="${x}" y="90" width="92" height="80" rx="8"/>`;
+    g+=`<text class="tnum" x="${CX(i)}" y="112">Tile ${i+1}</text>`;
+    if(i===0)g+=`<text class="rtag" x="${CX(i)}" y="134" style="fill:var(--bwd)">+2 on entry</text>`;
+    if(i===N-1)g+=`<text class="rtag" x="${CX(i)}" y="134" style="fill:var(--fwd)">+10 on entry</text>`;
+    const gg=greedyGlyph(i);
+    g+=`<text class="greedy" x="${CX(i)}" y="198" style="fill:${gg.cls}">${gg.txt}</text>`;
+  }
+  g+=`<text class="glabel" x="4" y="198" text-anchor="start"></text>`;
+  $('tiles').innerHTML=g;
+  const ag=$('agent'); const x=CX(agentAt)-76;
+  ag.style.setProperty('--x',`translateX(${x}px)`); ag.style.transform=`translateX(${x}px)`;
+  ag.classList.remove('bump');
+  if(phase===1&&pend.bump){void ag.getBBox();requestAnimationFrame(()=>ag.classList.add('bump'));}
+
+  const ar=$('arrow');
+  if(pend&&phase>=0){
+    const cx=CX(pend.s); let d;
+    if(pend.a===F){ d=pend.bump?`M${cx+14},70 L522,70`:`M${cx+14},70 L${cx+86},70`; ar.setAttribute('marker-end','url(#mF)'); ar.style.stroke='var(--fwd)'; }
+    else{ if(pend.s===0)d=`M60,86 C30,28 122,28 92,86`; else {const h=Math.max(8,70-10*pend.s); d=`M${cx},86 Q${(cx+76)/2},${h-20} 80,86`;} ar.setAttribute('marker-end','url(#mB)'); ar.style.stroke='var(--bwd)'; }
+    ar.setAttribute('d',d); ar.style.opacity=phase===0?1:.35;
+  }else{ar.setAttribute('d','');}
+
+  const pop=$('pop'); pop.classList.remove('show');
+  if(phase===2){ pop.setAttribute('x',CX(pend.s2)); pop.textContent=pend.r>0?`+${pend.r}`:'0'; pop.style.fill=pend.r===10?'var(--fwd)':pend.r===2?'var(--bwd)':'var(--muted)'; void pop.getBBox(); requestAnimationFrame(()=>pop.classList.add('show')); }
+}
+
+function renderStages(){
+  const li=[...$('stages').children]; const p=pend;
+  const txt=['','','',''];
+  if(p&&phase>=0){
+    const S=p.s+1;
+    const I=x=>`<i>${x}</i>`, M=x=>`<span class="mx">${x}</span>`;
+    const Aof=a=>a===F?'<span class="f">R</span>':'<span class="b">L</span>';
+    const Qf=(st,a)=>`${I('Q')}(${st}, ${Aof(a)})`;
+    const qF=f2(p.a===F?p.old:Q[p.s][F]), qB=f2(p.a===B?p.old:Q[p.s][B]);
+    if(p.how==='explore')txt[0]=`Drew ${M(`${I('u')} = ${p.u.toFixed(3)} &lt; ${I('ε')} = ${f2(p.eps)}`)}, so <b>explore</b>: pick at random → ${aName(p.a)}.`;
+    else if(p.how==='tie')txt[0]=`${M(`${I('u')} = ${p.u.toFixed(3)} ≥ ${I('ε')} = ${f2(p.eps)}`)}, so exploit — but ${M(`${Qf(S,F)} = ${Qf(S,B)} = ${f2(p.old)}`)}. Coin flip → ${aName(p.a)}.`;
+    else txt[0]=`${M(`${I('u')} = ${p.u.toFixed(3)} ≥ ${I('ε')} = ${f2(p.eps)}`)}, so <b>exploit</b>: ${M(`${Qf(S,F)} = ${qF}`)} vs ${M(`${Qf(S,B)} = ${qB}`)} → ${aName(p.a)}.`;
+    if(phase>=1){
+      if(p.a===F&&p.bump)txt[1]=`Right on tile 5 hits the wall; the agent stays on tile 5, so ${M(`${I('s′')} = 5`)}.`;
+      else if(p.a===F)txt[1]=`Right: tile ${S} → tile ${p.s2+1}, so ${M(`${I('s′')} = ${p.s2+1}`)}.`;
+      else if(p.stay)txt[1]=`Left on tile 1: already at the start, so ${M(`${I('s′')} = 1`)}.`;
+      else txt[1]=`Left: tile ${S} → straight back to tile 1, so ${M(`${I('s′')} = 1`)}.`;
+    }
+    if(phase>=2){
+      if(p.r===10)txt[2]=`Entered tile 5: ${M(`${I('r')} = +10`)}.`;
+      else if(p.r===2)txt[2]=`Entered tile 1: ${M(`${I('r')} = +2`)}.`;
+      else if(p.bump||p.stay)txt[2]=`Stayed put and re-entry is not rewarded: ${M(`${I('r')} = 0`)}.`;
+      else txt[2]=`Tile ${p.s2+1} pays nothing: ${M(`${I('r')} = 0`)}.`;
+    }
+    if(phase>=3){
+      const delta=p.target-p.old;
+      txt[3]=`Target ${M(`${I('r')} + ${I('γ')} max<sub>${I('a′')}</sub> ${I('Q')}(${I('s′')}, ${I('a′')}) = ${p.r} + ${f2(p.gamma)} × ${f2(p.maxNext)} = ${f2(p.target)}`)}. TD error ${M(`${I('δ')} = ${f2(p.target)} − ${f2(p.old)} = ${f2(delta)}`)}; the value moves by ${M(`${I('α')}${I('δ')} = ${f2(p.alpha*delta)}`)} toward the target.`+(p.reset?` Episode over — agent returns to tile 1.`:'');
+    }
+  }
+  li.forEach((el,i)=>{el.className=(phase>=0&&i<phase)?'done':(i===phase?'now':''); el.querySelector('span').innerHTML=txt[i]?'— '+txt[i]:'';});
+
+  const e=$('eqnum');
+  if(!p||phase<0){e.innerHTML='<span class="q">Press “Next stage” to take the first step.</span>';return;}
+  const S=p.s+1, A=p.a===F?'<span class="f">R</span>':'<span class="b">L</span>', q='<span class="q">?</span>';
+  const r=phase>=2?p.r:q, mx=phase>=1?f2(p.maxNext):q, sp=phase>=1?(p.s2+1):q;
+  const res=phase>=3?` = <span class="res">${f2(p.nw)}</span>`:'';
+  e.innerHTML=`<i>Q</i>(${S}, ${A}) ← ${f2(p.old)} + ${f2(p.alpha)} [ ${r} + ${f2(p.gamma)} × ${mx} − ${f2(p.old)} ]${res}`+(phase>=1?`&nbsp;&nbsp;<span class="q">(<i>s′</i> = ${sp}: max of ${f2(p.qn[0])}, ${f2(p.qn[1])})</span>`:'');
+}
+
+function shade(v,col){const m=Math.max(1,...Qstar.flat());const pct=Math.max(0,Math.min(1,v/m))*38;return `background:color-mix(in srgb, ${col} ${pct.toFixed(0)}%, transparent)`;}
+function renderTable(){
+  const agentAt=(phase<=0)?(phase===-1?s:pend.s):pend.s2;
+  const fl=(phase===3||phase===-1)&&lastFlash;
+  const cc=i=>i===agentAt?' cur':'';
+  let hd='<tr><th><span class="mx"><i>a</i> \\ <i>s</i></span></th>';
+  for(let i=0;i<N;i++)hd+=`<th class="${cc(i).trim()}">Tile ${i+1}</th>`;
+  $('qhead').innerHTML=hd+'</tr>';
+  const row=(a,lab,col)=>{let h=`<tr><td class="rowh">${lab}</td>`;for(let i=0;i<N;i++){const f=fl&&lastFlash[0]===i&&lastFlash[1]===a;const u=lastUpd&&lastUpd[0]===i&&lastUpd[1]===a;h+=`<td class="qc${cc(i)}${u?' upd':''}${f?' flash':''}" style="${shade(Q[i][a],col)}">${f2(Q[i][a])}</td>`;}return h+'</tr>';};
+  const srow=(a,lab,sep)=>{let h=`<tr class="star${sep?' sep':''}"><td class="rowh">${lab}</td>`;for(let i=0;i<N;i++)h+=`<td class="star${cc(i)}">${f2(Qstar[i][a])}</td>`;return h+'</tr>';};
+  $('qbody').innerHTML=
+    row(F,'<span class="mx"><i>Q</i>(<i>s</i>, <span class="f">R</span>)</span>','var(--fwd)')+
+    row(B,'<span class="mx"><i>Q</i>(<i>s</i>, <span class="b">L</span>)</span>','var(--bwd)')+
+    srow(F,'<span class="mx"><i>Q</i>*(<i>s</i>, <span class="f">R</span>)</span>',true)+
+    srow(B,'<span class="mx"><i>Q</i>*(<i>s</i>, <span class="b">L</span>)</span>',false);
+  if(phase===3)lastFlash=null;
+}
+function renderLog(){
+  $('logbody').innerHTML=logRows.map(r=>`<tr><td>${r.t}</td><td>${r.s+1}</td><td class="mx">${aShort(r.a)}</td><td>${r.how}</td><td>${r.r}</td><td>${r.s2+1}</td><td>${f2(r.nw)}</td></tr>`).join('')||'<tr><td colspan="7" style="text-align:left;color:var(--muted)">No steps yet.</td></tr>';
+}
+function renderStats(){ $('stats').innerHTML=`Step <b>${t}</b> · episode <b>${ep}</b>`; }
+function renderPlot(){
+  const c=$('plot'), dpr=window.devicePixelRatio||1, W=c.clientWidth, H=c.clientHeight;
+  c.width=W*dpr;c.height=H*dpr; const x=c.getContext('2d'); x.scale(dpr,dpr); x.clearRect(0,0,W,H);
+  const cs=getComputedStyle(document.documentElement), ink=cs.getPropertyValue('--muted'), good=cs.getPropertyValue('--good'), line=cs.getPropertyValue('--line');
+  const L=44,R=8,T=8,Bm=24, n=hist.length, ymax=Math.max(1e-9,...hist);
+  x.strokeStyle=line;x.lineWidth=1;x.beginPath();x.moveTo(L,T);x.lineTo(L,H-Bm);x.lineTo(W-R,H-Bm);x.stroke();
+  x.fillStyle=ink;x.font='12px "Atkinson Hyperlegible",sans-serif';x.textAlign='right';
+  x.fillText(ymax.toFixed(0),L-6,T+10);x.fillText('0',L-6,H-Bm);
+  x.textAlign='center';x.fillText(`step ${n-1}`,W-R-30,H-6);x.fillText('0',L,H-6);
+  if(n<2)return;
+  x.strokeStyle=good;x.lineWidth=2;x.beginPath();
+  const pw=W-L-R, stepI=Math.max(1,Math.floor(n/pw));
+  for(let i=0;i<n;i+=stepI){const px=L+pw*i/(n-1), py=T+(H-T-Bm)*(1-hist[i]/ymax); i===0?x.moveTo(px,py):x.lineTo(px,py);}
+  const i=n-1;x.lineTo(L+pw,T+(H-T-Bm)*(1-hist[i]/ymax));x.stroke();
+}
+function render(){renderTrack();renderStages();renderTable();renderStats();}
+
+/* ---------- controls ---------- */
+function bindRange(id,out,key,fmt,after){const el=$(id);const upd=()=>{P[key]=+el.value;$(out).textContent=fmt(P[key]);after&&after();};el.addEventListener('input',upd);upd();}
+bindRange('pA','vA','alpha',f2);
+bindRange('pG','vG','gamma',f2,()=>{if(Q){Qstar=solveQstar();render();}});
+bindRange('pE','vE','eps',f2);
+bindRange('pS','vS','stage',v=>v+' ms');
+$('pL').addEventListener('change',e=>{P.epLen=Math.max(0,parseInt(e.target.value)||0);reset();});
+$('pR').addEventListener('change',e=>{P.seed=parseInt(e.target.value)||1;reset();});
+$('pW').addEventListener('change',e=>{P.reentry=e.target.checked;Qstar=solveQstar();render();});
+$('cStar').addEventListener('change',e=>$('qwrap').classList.toggle('hide-star',!e.target.checked));
+$('bStage').onclick=()=>{stop();advance();};
+$('bPlay').onclick=()=>timer?stop():play();
+$('bStep').onclick=playStep;
+$('b100').onclick=()=>runInstant(100);
+$('b1000').onclick=()=>runInstant(1000);
+$('bReset').onclick=reset;
+document.addEventListener('keydown',e=>{
+  if(e.target.tagName==='INPUT'||e.target.tagName==='BUTTON')return;
+  if(e.code==='Space'){e.preventDefault();stop();advance();}
+  else if(e.key==='p'||e.key==='P'){timer?stop():play();}
+  else if(e.key==='s'||e.key==='S'){playStep();}
+});
+reset();
+})();
+</script>
+</body>
+</html>
