@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>DQN v0.1 — information flow</title>
+<title>DQN with experience replay — information flow</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&family=STIX+Two+Text:ital@0;1&display=swap" rel="stylesheet">
@@ -53,7 +53,7 @@ p{margin:.4rem 0}
 .rl{color:var(--learn); font-weight:700}
 .panel{background:var(--panel); border:1px solid var(--line); border-radius:10px; padding:16px 18px}
 
-.eq{margin-top:18px; font-family:var(--math); font-size:1.4rem; padding:12px 18px; overflow-x:auto}
+.eq{margin-top:18px; font-family:var(--math); font-size:1.15rem; padding:12px 18px; overflow-x:auto}
 .eq .row{white-space:nowrap; padding:3px 0}
 .eq .q{color:var(--muted)}
 .eq .res{font-weight:700; color:var(--learn)}
@@ -139,6 +139,20 @@ input[type=number]{font:inherit; color:var(--ink); background:var(--panel); bord
 .stepper{display:flex; flex-wrap:wrap; align-items:center; gap:10px 14px; margin:12px 0 0}
 .stepper .pos{font-weight:700; min-width:8.5em; text-align:center; font-variant-numeric:tabular-nums}
 button:disabled{opacity:.4; cursor:default}
+.cyl.on .box{fill:var(--hi); stroke-width:3.5}
+.brow{font:14px var(--math); fill:var(--ink); text-anchor:middle}
+.brow.new{fill:var(--good); font-weight:700}
+.brow.pick{fill:var(--learn); font-weight:700}
+.frac{display:inline-flex; flex-direction:column; vertical-align:middle; text-align:center; margin:0 .12em}
+.frac>span:first-child{border-bottom:1.2px solid currentColor; padding:0 .2em; line-height:1.15}
+.frac>span:last-child{line-height:1.15}
+.bigop{display:inline-flex; flex-direction:column; align-items:center; vertical-align:middle; margin:0 .12em}
+.bigop .op{font-size:1.7em; line-height:.95}
+.bigop .lim{font-size:.62em; line-height:1.1}
+.br{font-size:1.35em; vertical-align:-.05em}
+.eq .row{line-height:2.4}
+.fx{font-family:var(--math); font-size:17px; color:var(--learn); white-space:nowrap; line-height:1.3; padding-top:8px}
+.fx i{font-style:italic}
 .stagebar{display:flex; flex-wrap:wrap; gap:8px; margin:12px 0 0}
 .stagebar button{font-weight:400; border-color:var(--line); padding:7px 12px}
 .stagebar button b{margin-right:6px}
@@ -150,78 +164,82 @@ button:disabled{opacity:.4; cursor:default}
 </head>
 <body>
 <main>
-  <h1>DQN v0.1: information flow</h1>
+  <h1>DQN v0.2: experience replay</h1>
 
   <div class="panel eq">
-    <div class="row"><span class="t" id="tL"><i>ℒ<sub>i</sub></i></span> = [ <span class="t" id="tR"><i>r<sub>i</sub></i></span> + <i>γ</i> <span class="t" id="t2">max<sub><i>a</i></sub> <i>Q̂</i>(<i>s</i><sub><i>i</i>+1</sub>, <i>a</i>; <i>w</i>)</span> − <span class="t" id="t1"><i>Q̂</i>(<i>s<sub>i</sub></i>, <i>a<sub>i</sub></i>; <i>w</i>)</span> ]<sup>2</sup>
-      &nbsp;&nbsp;&nbsp;&nbsp; <span class="t" id="tW"><i>w</i> ← <i>w</i> − <i>η</i> ∇<sub><i>w</i></sub> <i>ℒ<sub>i</sub></i></span></div>
+    <div class="row"><span class="t" id="tL"><i>ℒ</i>(<i>w</i>)</span> = <span class="t" id="tB"><span class="frac"><span>1</span><span><i>B</i></span></span><span class="bigop"><span class="op">Σ</span><span class="lim"><i>i</i> ∈ batch</span></span></span><span class="br">[</span> <span class="t" id="tR"><i>r<sub>i</sub></i></span> + <i>γ</i> <span class="t" id="t2">max<sub><i>a</i></sub> <i>Q̂</i>(<i>s</i><sub><i>i</i>+1</sub>, <i>a</i>; <i>w</i>)</span> − <span class="t" id="t1"><i>Q̂</i>(<i>s<sub>i</sub></i>, <i>a<sub>i</sub></i>; <i>w</i>)</span> <span class="br">]</span><sup>2</sup>
+      &emsp;&emsp; <span class="t" id="tW"><i>w</i> ← <i>w</i> − <i>η</i> ∇<sub><i>w</i></sub> <i>ℒ</i>(<i>w</i>)</span></div>
   </div>
 
   <div class="panel schem">
-    <svg id="svg" viewBox="30 0 870 548" role="img" aria-label="DQN v0.1 schematic: environment, transition, Q-network, policy and loss">
+    <svg id="svg" viewBox="30 0 870 548" role="img" aria-label="DQN with experience replay: environment, transition, replay buffer, mini-batch, Q-network, policy and loss">
       <defs>
         <marker id="aG" viewBox="0 0 10 10" refX="8" refY="5" markerUnits="userSpaceOnUse" markerWidth="12" markerHeight="12" orient="auto"><path d="M0,0 L10,5 L0,10 z" style="fill:var(--act)"/></marker>
         <marker id="aK" viewBox="0 0 10 10" refX="8" refY="5" markerUnits="userSpaceOnUse" markerWidth="12" markerHeight="12" orient="auto"><path d="M0,0 L10,5 L0,10 z" style="fill:var(--flow)"/></marker>
         <marker id="aR" viewBox="0 0 10 10" refX="8" refY="5" markerUnits="userSpaceOnUse" markerWidth="12" markerHeight="12" orient="auto"><path d="M0,0 L10,5 L0,10 z" style="fill:var(--learn)"/></marker>
       </defs>
-
       <rect class="region" x="40" y="192" width="850" height="345" rx="34"/>
-      <text class="rlabel" x="96" y="512">DQN v0.1</text>
+      <text class="rlabel" x="96" y="512">DQN v0.2</text>
 
-      <!-- paths -->
       <path id="pPiEnv"  class="path g" d="M783,213 L783,32 L544,32" marker-end="url(#aG)"/>
       <path id="pEnvS"   class="path g" d="M398,32 L188,32 L188,51" marker-end="url(#aG)"/>
       <path id="pNextNN" class="path g" d="M188,180 L188,268 L372,268" marker-end="url(#aG)"/>
-      <path id="pSNN"    class="path k" d="M118,72 L96,72 L96,290 L372,290" marker-end="url(#aK)"/>
-      <path id="pNsNN"   class="path k" d="M118,166 L96,166 L96,290 L372,290"/>
+      <path id="pStore"  class="path k" d="M118,72 L90,72 L90,362 L106,362" marker-end="url(#aK)"/>
+      <path class="path k" d="M118,125 L90,125 M118,166 L90,166"/>
+      <path id="pBufMB"  class="path k" d="M244,366 L264,366" marker-end="url(#aK)"/>
+      <path id="pMBNN"   class="path r" d="M296,342 L296,290 L372,290" marker-end="url(#aR)"/>
+      <path id="pMBL"    class="path r" d="M296,394 L296,462 L381,462" marker-end="url(#aR)"/>
       <path id="pNNPi"   class="path g" d="M540,268 L783,268 L783,256" marker-end="url(#aG)"/>
       <path id="pNNL"    class="path r" d="M540,290 L615,290 L615,462 L536,462" marker-end="url(#aR)"/>
-      <path id="pRL"     class="path r" d="M118,125 L72,125 L72,462 L381,462" marker-end="url(#aR)"/>
       <path id="pLNN"    class="path r" d="M458,438 L458,350" marker-end="url(#aR)"/>
 
-      <!-- ENV -->
       <rect id="bEnv" class="box" x="400" y="10" width="140" height="44" rx="10"/>
       <text class="bt" x="470" y="38" text-anchor="middle" style="font-weight:700;font-size:18px">ENV</text>
-
-      <!-- transition boxes -->
       <rect id="bSA" class="box" x="120" y="51" width="176" height="46"/>
       <text class="bt" x="128" y="70">State (<tspan class="mv">s</tspan><tspan class="mv" font-size="13" dy="4">t</tspan><tspan dy="-4">)</tspan></text>
       <text class="bt" x="128" y="90">Action (<tspan class="mv">a</tspan><tspan class="mv" font-size="13" dy="4">t</tspan><tspan dy="-4">)</tspan></text>
-
       <rect id="bR" class="box" x="120" y="111" width="176" height="28"/>
       <text class="bt" x="128" y="130">Reward (<tspan class="mv">r</tspan><tspan class="mv" font-size="13" dy="4">t</tspan><tspan dy="-4">)</tspan></text>
-
       <rect id="bNs" class="box" x="120" y="152" width="176" height="28"/>
       <text class="bt" x="128" y="171">Next State (<tspan class="mv">s</tspan><tspan class="mv" font-size="13" dy="4">t+1</tspan><tspan dy="-4">)</tspan></text>
-
-      <!-- network -->
-      <g id="net"></g>
-      <text class="tag" x="206" y="284">two passes: <tspan font-style="italic">s</tspan><tspan font-style="italic" font-size="13" dy="4">i</tspan><tspan dy="-4">, </tspan><tspan font-style="italic">s</tspan><tspan font-style="italic" font-size="13" dy="4">i+1</tspan></text>
-
-      <!-- policy -->
       <rect id="bPi" class="box" x="710" y="215" width="146" height="40" rx="8"/>
       <text class="tag" x="783" y="241" text-anchor="middle" style="font-size:20px;font-style:italic">π</text>
       <text class="tag" x="520" y="206"><tspan font-style="italic">a</tspan><tspan font-style="italic" font-size="13" dy="4">t</tspan><tspan dy="-4"> = ε-greedy  argmax</tspan><tspan font-style="italic" font-size="13" dy="4">a</tspan><tspan dy="-4"> </tspan><tspan font-style="italic">Q̂</tspan>(<tspan font-style="italic">s</tspan><tspan font-style="italic" font-size="13" dy="4">t</tspan><tspan dy="-4">, </tspan><tspan font-style="italic">a</tspan>; <tspan font-style="italic">w</tspan>)</text>
       <text class="tag g" x="660" y="24"><tspan>action (</tspan><tspan font-style="italic">a</tspan><tspan font-style="italic" font-size="13" dy="4">t</tspan><tspan dy="-4">)</tspan></text>
-
-      <!-- red labels -->
       <text class="tag r" x="624" y="372"><tspan font-style="italic">Q̂</tspan>(<tspan font-style="italic">s</tspan><tspan font-style="italic" font-size="13" dy="4">i</tspan><tspan dy="-4">, </tspan><tspan font-style="italic">a</tspan><tspan font-style="italic" font-size="13" dy="4">i</tspan><tspan dy="-4">; </tspan><tspan font-style="italic">w</tspan>)  ①</text>
       <text class="tag r" x="624" y="418">max<tspan font-style="italic" font-size="13" dy="4">a</tspan><tspan dy="-4"> </tspan><tspan font-style="italic">Q̂</tspan>(<tspan font-style="italic">s</tspan><tspan font-style="italic" font-size="13" dy="4">i+1</tspan><tspan dy="-4">, </tspan><tspan font-style="italic">a</tspan>; <tspan font-style="italic">w</tspan>)  ②</text>
       <text class="tag r" x="0" y="0" transform="translate(450,420) rotate(-90)">update <tspan font-style="italic">w</tspan></text>
-
-      <!-- loss -->
       <rect id="bL" class="box lbox" x="383" y="440" width="152" height="44" rx="10"/>
       <text class="tag r" x="459" y="469" text-anchor="middle" style="font-size:21px;font-style:italic">ℒ</text>
-      <text class="tag r" x="320" y="512"><tspan font-style="italic">ℒ</tspan><tspan font-style="italic" font-size="13" dy="4">i</tspan><tspan dy="-4"> = [ </tspan><tspan font-style="italic">r</tspan><tspan font-style="italic" font-size="13" dy="4">i</tspan><tspan dy="-4"> + </tspan><tspan font-style="italic">γ</tspan><tspan> max </tspan><tspan font-style="italic">Q̂</tspan>(<tspan font-style="italic">s</tspan><tspan font-style="italic" font-size="13" dy="4">i+1</tspan><tspan dy="-4">, </tspan><tspan font-style="italic">a</tspan>; <tspan font-style="italic">w</tspan>) ② − <tspan font-style="italic">Q̂</tspan>(<tspan font-style="italic">s</tspan><tspan font-style="italic" font-size="13" dy="4">i</tspan><tspan dy="-4">, </tspan><tspan font-style="italic">a</tspan><tspan font-style="italic" font-size="13" dy="4">i</tspan><tspan dy="-4">; </tspan><tspan font-style="italic">w</tspan>) ① ]²</text>
+
+      <g id="bBuf" class="cyl">
+        <path class="box" d="M110,302 L110,420 A66,13 0 0 0 242,420 L242,302 Z"/>
+        <ellipse class="box" cx="176" cy="302" rx="66" ry="13"/>
+      </g>
+      <g id="bufrows"></g>
+      <text class="bt" id="bufN" x="176" y="452" text-anchor="middle" style="font-size:14px;fill:var(--muted)"></text>
+
+      <g id="bMB" class="cyl mb">
+        <path class="box lbox" d="M268,346 L268,388 A28,8 0 0 0 324,388 L324,346 Z"/>
+        <ellipse class="box lbox" cx="296" cy="346" rx="28" ry="8"/>
+      </g>
+      <text class="bt" x="296" y="370" text-anchor="middle" style="font-size:13px;fill:var(--learn)">mini-</text>
+      <text class="bt" x="296" y="384" text-anchor="middle" style="font-size:13px;fill:var(--learn)">batch</text>
+      <text class="tag r" x="304" y="416"><tspan font-style="italic">B</tspan> = 4</text>
+
+      <text class="tag r" x="110" y="280">two passes: <tspan font-style="italic">s</tspan><tspan font-style="italic" font-size="13" dy="4">i</tspan><tspan dy="-4">&#8203;</tspan>, <tspan font-style="italic">s</tspan><tspan font-style="italic" font-size="13" dy="4">i+1</tspan><tspan dy="-4">&#8203;</tspan></text>
+
+      <g id="net"></g>
+      <foreignObject x="250" y="474" width="630" height="66"><div xmlns="http://www.w3.org/1999/xhtml" class="fx"><i>ℒ</i> = <span class="frac"><span>1</span><span><i>B</i></span></span><span class="bigop"><span class="op">Σ</span><span class="lim"><i>i</i></span></span><span class="br">[</span> <i>r<sub>i</sub></i> + <i>γ</i> max <i>Q̂</i>(<i>s</i><sub><i>i</i>+1</sub>, <i>a</i>; <i>w</i>) ② − <i>Q̂</i>(<i>s<sub>i</sub></i>, <i>a<sub>i</sub></i>; <i>w</i>) ① <span class="br">]</span><sup>2</sup></div></foreignObject>
 
       <g id="pkts"></g>
     </svg>
   </div>
-  <div class="panel caption" aria-live="polite"><span class="n" id="capN">Ready</span><span class="d" id="capD">Press “Next ▶” to follow one transition through DQN.</span></div>
+  <div class="panel caption" aria-live="polite"><span class="n" id="capN">Ready</span><span class="d" id="capD">Press “Next ▶” to follow one transition through DQN with experience replay.</span></div>
 
   <div class="stepper">
     <button id="bPrev" aria-label="Previous stage">◀ Previous</button>
-    <span class="pos" id="pos">Stage – of 6</span>
+    <span class="pos" id="pos">Stage – of 8</span>
     <button id="bNext" class="primary" aria-label="Next stage">Next ▶</button>
     <button id="bAgain">Replay this stage</button>
   </div>
@@ -252,12 +270,32 @@ let queued=false,t=0,phase=-1,playing=false,busy=false,skip=false,token=0;
 
 const ST=[
  {n:'Act',d:'The current state <span class="mx"><i>s<sub>t</sub></i></span> goes into the network, which returns <span class="mx"><i>Q̂</i>(<i>s<sub>t</sub></i>, <i>a</i>; <i>w</i>)</span> for every action. The policy <span class="mx"><i>π</i></span> picks <span class="mx"><i>a<sub>t</sub></i></span>: usually the largest, at random with probability <span class="mx"><i>ε</i></span>.', eq:[]},
- {n:'Environment responds',d:'ENV applies <span class="mx"><i>a<sub>t</sub></i></span> and returns the reward <span class="mx"><i>r<sub>t</sub></i></span> and the next state <span class="mx"><i>s<sub>t+1</sub></i></span>. The tuple <span class="mx">(<i>s<sub>t</sub></i>, <i>a<sub>t</sub></i>, <i>r<sub>t</sub></i>, <i>s<sub>t+1</sub></i>)</span> is the training sample <span class="mx"><i>i</i></span>.', eq:[]},
- {n:'Pass 1',d:'Feed <span class="mx"><i>s<sub>i</sub></i></span> through the network and keep only the output of the action actually taken: <span class="mx"><i>Q̂</i>(<i>s<sub>i</sub></i>, <i>a<sub>i</sub></i>; <i>w</i>)</span> ①. This is the prediction.', eq:['t1']},
- {n:'Pass 2',d:'Feed <span class="mx"><i>s<sub>i+1</sub></i></span> through the <b>same</b> network and take the largest output: <span class="mx">max<sub><i>a</i></sub> <i>Q̂</i>(<i>s<sub>i+1</sub></i>, <i>a</i>; <i>w</i>)</span> ②. This is the bootstrap part of the target.', eq:['t2']},
- {n:'Form the loss',d:'Combine the reward with ② to get the target <span class="mx"><i>r<sub>i</sub></i> + <i>γ</i>·②</span>, and compare it with the prediction ①: <span class="mx"><i>ℒ<sub>i</sub></i></span> is the squared difference.', eq:['tR','t1','t2','tL']},
- {n:'Update the weights',d:'Backpropagate <span class="mx">∇<sub><i>w</i></sub><i>ℒ<sub>i</sub></i></span> and take a gradient step. Because the target also used <span class="mx"><i>w</i></span>, it moves as well; later versions freeze it in a separate target network. Then <span class="mx"><i>s<sub>t+1</sub></i></span> becomes the new state and the loop repeats.', eq:['tW']}
+ {n:'Environment responds',d:'ENV applies <span class="mx"><i>a<sub>t</sub></i></span> and returns the reward <span class="mx"><i>r<sub>t</sub></i></span> and the next state <span class="mx"><i>s<sub>t+1</sub></i></span>.', eq:[]},
+ {n:'Store in replay buffer',d:()=>`The transition <span class="mx">(<i>s<sub>t</sub></i>, <i>a<sub>t</sub></i>, <i>r<sub>t</sub></i>, <i>s<sub>t+1</sub></i>)</span> is appended to the replay buffer, which now holds <span class="mx"><i>N</i> = ${bufN()}</span> transitions. Old experience is kept, so it can be reused many times.`, eq:[]},
+ {n:'Sample a mini-batch',d:()=>{const b=batch(),n=bufN();return (n<B?`Only ${n} transition${n>1?'s':''} stored so far, so the mini-batch uses all of them: `:`<span class="mx"><i>B</i> = ${B}</span> transitions are drawn at random from the buffer: `)+`<span class="mx"><i>i</i> ∈ {${b.join(', ')}}</span>. Random sampling breaks the correlation between consecutive steps.`;}, eq:['tB']},
+ {n:'Pass 1',d:'Feed every <span class="mx"><i>s<sub>i</sub></i></span> in the mini-batch through the network and keep the output of the action taken: <span class="mx"><i>Q̂</i>(<i>s<sub>i</sub></i>, <i>a<sub>i</sub></i>; <i>w</i>)</span> ①. These are the predictions.', eq:['t1']},
+ {n:'Pass 2',d:'Feed every <span class="mx"><i>s<sub>i+1</sub></i></span> through the <b>same</b> network and take the largest output: <span class="mx">max<sub><i>a</i></sub> <i>Q̂</i>(<i>s<sub>i+1</sub></i>, <i>a</i>; <i>w</i>)</span> ②.', eq:['t2']},
+ {n:'Form the loss',d:'For each sample, the target is <span class="mx"><i>r<sub>i</sub></i> + <i>γ</i>·②</span>, compared with the prediction ①. The loss <span class="mx"><i>ℒ</i>(<i>w</i>)</span> averages the squared errors over the mini-batch.', eq:['tR','t1','t2','tB','tL']},
+ {n:'Update the weights',d:'Backpropagate <span class="mx">∇<sub><i>w</i></sub><i>ℒ</i></span> and take a gradient step. The target still uses the same <span class="mx"><i>w</i></span>; a separate target network fixes that next. Then <span class="mx"><i>s<sub>t+1</sub></i></span> becomes the new state and the loop repeats.', eq:['tW']}
 ];
+const LAST=ST.length-1, B=4;
+function mulberry32(a){return function(){a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296}}
+const bufN=()=>t+(phase>=2?1:0);
+function batch(){const n=bufN(),r=mulberry32(t*7919+13),pool=[...Array(n)].map((_,i)=>i+1),out=[];while(out.length<Math.min(B,n)){out.push(pool.splice(Math.floor(r()*pool.length),1)[0]);}return out;}
+const tsub=(b,x)=>`<tspan font-style="italic">${b}</tspan><tspan font-style="italic" font-size="10" dy="3">${x}</tspan><tspan dy="-3">&#8203;</tspan>`;
+function renderBuf(){
+  const n=bufN(), picks=(phase>=3)?batch():[];
+  let h='';
+  if(n===0)h=`<text class="brow" x="176" y="366" style="fill:var(--muted)">empty</text>`;
+  else{
+    const lo=Math.max(1,n-2); let y=334;
+    if(lo>1){h+=`<text class="brow" x="176" y="${y}" style="fill:var(--muted)">⋮</text>`;} y+=20;
+    for(let k=lo;k<=n;k++,y+=21){const cls=(phase===2&&k===n)?' new':picks.includes(k)?' pick':'';
+      h+=`<text class="brow${cls}" x="176" y="${y}">${tsub('s',k)}, ${tsub('a',k)}, ${tsub('r',k)}, ${tsub('s',k+1)}</text>`;}
+  }
+  $('bufrows').innerHTML=h;
+  $('bufN').textContent=`replay buffer · N = ${n}`;
+}
 $('stagebar').innerHTML=ST.map((s,i)=>`<button data-k="${i}"><b>${i+1}</b>${s.n}</button>`).join('');
 
 
@@ -297,28 +335,30 @@ function move(pid,label,cls){
     requestAnimationFrame(fr);
   });
 }
-const sub=(b,s)=>`${b}<tspan font-size="12" dy="4">${s}</tspan><tspan dy="-4"></tspan>`;
-function boxes(ids){['bEnv','bSA','bR','bNs','bPi','bL'].forEach(id=>$(id).classList.toggle('on',ids.includes(id)));}
+const sub=(b,s)=>`${b}<tspan font-size="12" dy="4">${s}</tspan><tspan dy="-4">&#8203;</tspan>`;
+function boxes(ids){['bEnv','bSA','bR','bNs','bPi','bL','bBuf','bMB'].forEach(id=>$(id).classList.toggle('on',ids.includes(id)));}
 async function animate(ph){
   if(ph===0){ boxes(['bNs']); await move('pNextNN',sub('s','t'),'g'); drawNet('fwd'); boxes(['bPi']); await move('pNNPi',`Q̂(${sub('s','t')}, ·)`,'g'); await move('pPiEnv',sub('a','t'),'g'); drawNet(null); }
   if(ph===1){ boxes(['bEnv']); await move('pEnvS',`${sub('r','t')}, ${sub('s','t+1')}`,'g'); boxes(['bSA','bR','bNs']); }
-  if(ph===2){ boxes(['bSA']); await move('pSNN',sub('s','i'),'k'); drawNet('fwd'); await move('pNNL','① '+`Q̂(${sub('s','i')}, ${sub('a','i')})`,'r'); drawNet(null); boxes(['bL']); }
-  if(ph===3){ boxes(['bNs']); await move('pNsNN',sub('s','i+1'),'k'); drawNet('fwd'); await move('pNNL','② max Q̂',"r"); drawNet(null); boxes(['bL']); }
-  if(ph===4){ boxes(['bR']); await move('pRL',sub('r','i'),'r'); boxes(['bL']); }
-  if(ph===5){ boxes(['bL']); await move('pLNN','∇w','r'); drawNet('upd'); await sleep(skip||reduce?0:P.dur*.6); drawNet(null); boxes([]); }
+  if(ph===2){ boxes(['bSA','bR','bNs']); await move('pStore',`(${sub('s','t')}, ${sub('a','t')}, ${sub('r','t')}, ${sub('s','t+1')})`,'k'); boxes(['bBuf']); }
+  if(ph===3){ boxes(['bBuf']); await move('pBufMB',`${batch().length} samples`,'k'); boxes(['bMB']); }
+  if(ph===4){ boxes(['bMB']); await move('pMBNN',sub('s','i'),'r'); drawNet('fwd'); await move('pNNL','① '+`Q̂(${sub('s','i')}, ${sub('a','i')})`,'r'); drawNet(null); boxes(['bL']); }
+  if(ph===5){ boxes(['bMB']); await move('pMBNN',sub('s','i+1'),'r'); drawNet('fwd'); await move('pNNL','② max Q̂','r'); drawNet(null); boxes(['bL']); }
+  if(ph===6){ boxes(['bMB']); await move('pMBL',sub('r','i'),'r'); boxes(['bL']); }
+  if(ph===7){ boxes(['bL']); await move('pLNN','∇w','r'); drawNet('upd'); await sleep(skip||reduce?0:P.dur*.6); drawNet(null); boxes([]); }
 }
 function show(){
   [...$('stagebar').children].forEach((el,i)=>el.className=phase<0?'':(i<phase?'done':i===phase?'now':''));
-  ['tL','tR','t1','t2','tW'].forEach(id=>$(id).classList.remove('on'));
-  if(phase>=0){ ST[phase].eq.forEach(id=>$(id).classList.add('on')); $('capN').textContent=`${phase+1} / 6 · ${ST[phase].n}`; $('capD').innerHTML=ST[phase].d; }
-  else { $('capN').textContent='Ready'; $('capD').innerHTML='Press “Next ▶” to follow one transition through DQN.'; }
-  $('pos').textContent=phase<0?'Stage – of 6':`Stage ${phase+1} of 6`; $('bPrev').disabled=phase<=0&&t===0; $('bAgain').disabled=phase<0;
+  ['tL','tB','tR','t1','t2','tW'].forEach(id=>$(id).classList.remove('on'));
+  if(phase>=0){ ST[phase].eq.forEach(id=>$(id).classList.add('on')); $('capN').textContent=`${phase+1} / ${ST.length} · ${ST[phase].n}`; const d=ST[phase].d; $('capD').innerHTML=typeof d==='function'?d():d; }
+  else { $('capN').textContent='Ready'; $('capD').innerHTML='Press “Next ▶” to follow one transition through DQN with experience replay.'; }
+  $('pos').textContent=phase<0?`Stage – of ${ST.length}`:`Stage ${phase+1} of ${ST.length}`; renderBuf(); $('bPrev').disabled=phase<=0&&t===0; $('bAgain').disabled=phase<0;
   $('stats').innerHTML=`Time step <span class="mx"><i>t</i> = ${t}</span>`;
 }
 async function stage(){
   if(busy){skip=true;queued=true;return;}
   busy=true; skip=false; const my=token;
-  if(phase===5||phase===-1){ if(phase===5)t++; phase=0; } else phase++;
+  if(phase===LAST||phase===-1){ if(phase===LAST)t++; phase=0; } else phase++;
   show(); await animate(phase);
   busy=false; skip=false; if(my!==token)return;
   if(queued){queued=false; await stage();}
@@ -331,7 +371,7 @@ async function play(){
 }
 async function playStep(){
   stopAll(); const my=token; $('bStep').textContent='Playing…';
-  do{await stage(); if(my!==token)return; if(phase!==5)await sleep(reduce?300:Math.max(200,P.dur*.35));}while(phase!==5);
+  do{await stage(); if(my!==token)return; if(phase!==LAST)await sleep(reduce?300:Math.max(200,P.dur*.35));}while(phase!==LAST);
   $('bStep').textContent='Play one step';
 }
 function reset(){stopAll();t=0;phase=-1;boxes([]);show();}
@@ -340,7 +380,7 @@ const sp=$('pS'),su=()=>{P.dur=+sp.value;$('vS').textContent=P.dur+' ms';};sp.ad
 $('stagebar').addEventListener('click',e=>{const b=e.target.closest('button');if(!b)return;stopAll();phase=(+b.dataset.k)-1;stage();});
 function goTo(k){stopAll();phase=k-1;stage();}
 $('bNext').onclick=()=>{if(playing)stopAll();stage();};
-$('bPrev').onclick=()=>{ if(phase>0)goTo(phase-1); else if(phase===0&&t>0){t--;goTo(5);} };
+$('bPrev').onclick=()=>{ if(phase>0)goTo(phase-1); else if(phase===0&&t>0){t--;goTo(LAST);} };
 $('bAgain').onclick=()=>{ if(phase>=0){const k=phase; if(k===0){stopAll();phase=-1;stage();} else goTo(k);} };
 $('bStep').onclick=playStep; $('bPlay').onclick=play; $('bReset').onclick=reset;
 document.addEventListener('keydown',e=>{
