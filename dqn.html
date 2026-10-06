@@ -153,7 +153,7 @@ button:disabled{opacity:.4; cursor:default}
   <h1>DQN v0.1: information flow</h1>
 
   <div class="panel eq">
-    <div class="row"><span class="t" id="tL"><i>ℒ<sub>i</sub></i></span> = [ <span class="t" id="tR"><i>r<sub>i</sub></i></span> + <i>γ</i> <span class="t" id="t2">max<sub><i>a</i></sub> <i>Q̂</i>(<i>s</i><sub><i>i</i>+1</sub>, <i>a</i>; <i>w</i>)</span> − <span class="t" id="t1"><i>Q̂</i>(<i>s<sub>i</sub></i>, <i>a<sub>i</sub></i>; <i>w</i>)</span> ]<sup>2</sup>
+    <div class="row"><span class="t" id="tL"><i>ℒ<sub>i</sub></i></span> = [ <span class="t" id="tR"><i>r<sub>i</sub></i></span> + <i>γ</i> <span class="t" id="t2">max<sub><i>a</i></sub> <i>Q̂</i>(<i>s</i><sub><i>i</i>+1</sub>, <i>a</i>; <i>w</i><sup>−</sup>)</span> − <span class="t" id="t1"><i>Q̂</i>(<i>s<sub>i</sub></i>, <i>a<sub>i</sub></i>; <i>w</i>)</span> ]<sup>2</sup>
       &nbsp;&nbsp;&nbsp;&nbsp; <span class="t" id="tW"><i>w</i> ← <i>w</i> − <i>η</i> ∇<sub><i>w</i></sub> <i>ℒ<sub>i</sub></i></span></div>
   </div>
 
@@ -206,13 +206,13 @@ button:disabled{opacity:.4; cursor:default}
 
       <!-- red labels -->
       <text class="tag r" x="624" y="372"><tspan font-style="italic">Q̂</tspan>(<tspan font-style="italic">s</tspan><tspan font-style="italic" font-size="13" dy="4">i</tspan><tspan dy="-4">, </tspan><tspan font-style="italic">a</tspan><tspan font-style="italic" font-size="13" dy="4">i</tspan><tspan dy="-4">; </tspan><tspan font-style="italic">w</tspan>)  ①</text>
-      <text class="tag r" x="624" y="418">max<tspan font-style="italic" font-size="13" dy="4">a</tspan><tspan dy="-4"> </tspan><tspan font-style="italic">Q̂</tspan>(<tspan font-style="italic">s</tspan><tspan font-style="italic" font-size="13" dy="4">i+1</tspan><tspan dy="-4">, </tspan><tspan font-style="italic">a</tspan>; <tspan font-style="italic">w</tspan>)  ②</text>
+      <text class="tag r" x="624" y="418">max<tspan font-style="italic" font-size="13" dy="4">a</tspan><tspan dy="-4"> </tspan><tspan font-style="italic">Q̂</tspan>(<tspan font-style="italic">s</tspan><tspan font-style="italic" font-size="13" dy="4">i+1</tspan><tspan dy="-4">, </tspan><tspan font-style="italic">a</tspan>; <tspan font-style="italic">w</tspan><tspan font-size="11" dy="-6">−</tspan><tspan dy="6">)  ②</tspan></text>
       <text class="tag r" x="0" y="0" transform="translate(450,420) rotate(-90)">update <tspan font-style="italic">w</tspan></text>
 
       <!-- loss -->
       <rect id="bL" class="box lbox" x="383" y="440" width="152" height="44" rx="10"/>
       <text class="tag r" x="459" y="469" text-anchor="middle" style="font-size:21px;font-style:italic">ℒ</text>
-      <text class="tag r" x="320" y="512"><tspan font-style="italic">ℒ</tspan><tspan font-style="italic" font-size="13" dy="4">i</tspan><tspan dy="-4"> = [ </tspan><tspan font-style="italic">r</tspan><tspan font-style="italic" font-size="13" dy="4">i</tspan><tspan dy="-4"> + </tspan><tspan font-style="italic">γ</tspan><tspan> max </tspan><tspan font-style="italic">Q̂</tspan>(<tspan font-style="italic">s</tspan><tspan font-style="italic" font-size="13" dy="4">i+1</tspan><tspan dy="-4">, </tspan><tspan font-style="italic">a</tspan>; <tspan font-style="italic">w</tspan>) ② − <tspan font-style="italic">Q̂</tspan>(<tspan font-style="italic">s</tspan><tspan font-style="italic" font-size="13" dy="4">i</tspan><tspan dy="-4">, </tspan><tspan font-style="italic">a</tspan><tspan font-style="italic" font-size="13" dy="4">i</tspan><tspan dy="-4">; </tspan><tspan font-style="italic">w</tspan>) ① ]²</text>
+      <text class="tag r" x="320" y="512"><tspan font-style="italic">ℒ</tspan><tspan font-style="italic" font-size="13" dy="4">i</tspan><tspan dy="-4"> = [ </tspan><tspan font-style="italic">r</tspan><tspan font-style="italic" font-size="13" dy="4">i</tspan><tspan dy="-4"> + </tspan><tspan font-style="italic">γ</tspan><tspan> max </tspan><tspan font-style="italic">Q̂</tspan>(<tspan font-style="italic">s</tspan><tspan font-style="italic" font-size="13" dy="4">i+1</tspan><tspan dy="-4">, </tspan><tspan font-style="italic">a</tspan>; <tspan font-style="italic">w</tspan><tspan font-size="11" dy="-6">−</tspan><tspan dy="6">) ② − </tspan><tspan font-style="italic">Q̂</tspan>(<tspan font-style="italic">s</tspan><tspan font-style="italic" font-size="13" dy="4">i</tspan><tspan dy="-4">, </tspan><tspan font-style="italic">a</tspan><tspan font-style="italic" font-size="13" dy="4">i</tspan><tspan dy="-4">; </tspan><tspan font-style="italic">w</tspan>) ① ]²</text>
 
       <g id="pkts"></g>
     </svg>
@@ -254,9 +254,9 @@ const ST=[
  {n:'Act',d:'The current state <span class="mx"><i>s<sub>t</sub></i></span> goes into the network, which returns <span class="mx"><i>Q̂</i>(<i>s<sub>t</sub></i>, <i>a</i>; <i>w</i>)</span> for every action. The policy <span class="mx"><i>π</i></span> picks <span class="mx"><i>a<sub>t</sub></i></span>: usually the largest, at random with probability <span class="mx"><i>ε</i></span>.', eq:[]},
  {n:'Environment responds',d:'ENV applies <span class="mx"><i>a<sub>t</sub></i></span> and returns the reward <span class="mx"><i>r<sub>t</sub></i></span> and the next state <span class="mx"><i>s<sub>t+1</sub></i></span>. The tuple <span class="mx">(<i>s<sub>t</sub></i>, <i>a<sub>t</sub></i>, <i>r<sub>t</sub></i>, <i>s<sub>t+1</sub></i>)</span> is the training sample <span class="mx"><i>i</i></span>.', eq:[]},
  {n:'Pass 1',d:'Feed <span class="mx"><i>s<sub>i</sub></i></span> through the network and keep only the output of the action actually taken: <span class="mx"><i>Q̂</i>(<i>s<sub>i</sub></i>, <i>a<sub>i</sub></i>; <i>w</i>)</span> ①. This is the prediction.', eq:['t1']},
- {n:'Pass 2',d:'Feed <span class="mx"><i>s<sub>i+1</sub></i></span> through the <b>same</b> network and take the largest output: <span class="mx">max<sub><i>a</i></sub> <i>Q̂</i>(<i>s<sub>i+1</sub></i>, <i>a</i>; <i>w</i>)</span> ②. This is the bootstrap part of the target.', eq:['t2']},
+ {n:'Pass 2',d:'Feed <span class="mx"><i>s<sub>i+1</sub></i></span> through the same network, but with the weights from the previous iteration <span class="mx"><i>w</i><sup>−</sup></span>, and take the largest output: <span class="mx">max<sub><i>a</i></sub> <i>Q̂</i>(<i>s<sub>i+1</sub></i>, <i>a</i>; <i>w</i><sup>−</sup>)</span> ②. This is the bootstrap part of the target.', eq:['t2']},
  {n:'Form the loss',d:'Combine the reward with ② to get the target <span class="mx"><i>r<sub>i</sub></i> + <i>γ</i>·②</span>, and compare it with the prediction ①: <span class="mx"><i>ℒ<sub>i</sub></i></span> is the squared difference.', eq:['tR','t1','t2','tL']},
- {n:'Update the weights',d:'Backpropagate <span class="mx">∇<sub><i>w</i></sub><i>ℒ<sub>i</sub></i></span> and take a gradient step. Because the target also used <span class="mx"><i>w</i></span>, it moves as well; later versions freeze it in a separate target network. Then <span class="mx"><i>s<sub>t+1</sub></i></span> becomes the new state and the loop repeats.', eq:['tW']}
+ {n:'Update the weights',d:'Backpropagate <span class="mx">∇<sub><i>w</i></sub><i>ℒ<sub>i</sub></i></span> and take a gradient step. The target was computed with <span class="mx"><i>w</i><sup>−</sup></span>, the previous iteration’s weights, so it is held fixed during this step; after the step, <span class="mx"><i>w</i><sup>−</sup> ← <i>w</i></span>. Then <span class="mx"><i>s<sub>t+1</sub></i></span> becomes the new state and the loop repeats.', eq:['tW']}
 ];
 $('stagebar').innerHTML=ST.map((s,i)=>`<button data-k="${i}"><b>${i+1}</b>${s.n}</button>`).join('');
 
@@ -303,7 +303,7 @@ async function animate(ph){
   if(ph===0){ boxes(['bNs']); await move('pNextNN',sub('s','t'),'g'); drawNet('fwd'); boxes(['bPi']); await move('pNNPi',`Q̂(${sub('s','t')}, ·)`,'g'); await move('pPiEnv',sub('a','t'),'g'); drawNet(null); }
   if(ph===1){ boxes(['bEnv']); await move('pEnvS',`${sub('r','t')}, ${sub('s','t+1')}`,'g'); boxes(['bSA','bR','bNs']); }
   if(ph===2){ boxes(['bSA']); await move('pSNN',sub('s','i'),'k'); drawNet('fwd'); await move('pNNL','① '+`Q̂(${sub('s','i')}, ${sub('a','i')})`,'r'); drawNet(null); boxes(['bL']); }
-  if(ph===3){ boxes(['bNs']); await move('pNsNN',sub('s','i+1'),'k'); drawNet('fwd'); await move('pNNL','② max Q̂',"r"); drawNet(null); boxes(['bL']); }
+  if(ph===3){ boxes(['bNs']); await move('pNsNN',sub('s','i+1'),'k'); drawNet('fwd'); await move('pNNL','② max Q̂(·; w⁻)',"r"); drawNet(null); boxes(['bL']); }
   if(ph===4){ boxes(['bR']); await move('pRL',sub('r','i'),'r'); boxes(['bL']); }
   if(ph===5){ boxes(['bL']); await move('pLNN','∇w','r'); drawNet('upd'); await sleep(skip||reduce?0:P.dur*.6); drawNet(null); boxes([]); }
 }
