@@ -167,7 +167,7 @@ button:disabled{opacity:.4; cursor:default}
   <h1>DQN v0.2: experience replay</h1>
 
   <div class="panel eq">
-    <div class="row"><span class="t" id="tL"><i>ℒ</i>(<i>w</i>)</span> = <span class="t" id="tB"><span class="frac"><span>1</span><span><i>B</i></span></span><span class="bigop"><span class="op">Σ</span><span class="lim"><i>i</i> ∈ batch</span></span></span><span class="br">[</span> <span class="t" id="tR"><i>r<sub>i</sub></i></span> + <i>γ</i> <span class="t" id="t2">max<sub><i>a</i></sub> <i>Q̂</i>(<i>s</i><sub><i>i</i>+1</sub>, <i>a</i>; <i>w</i>)</span> − <span class="t" id="t1"><i>Q̂</i>(<i>s<sub>i</sub></i>, <i>a<sub>i</sub></i>; <i>w</i>)</span> <span class="br">]</span><sup>2</sup>
+    <div class="row"><span class="t" id="tL"><i>ℒ</i>(<i>w</i>)</span> = <span class="t" id="tB"><span class="frac"><span>1</span><span><i>B</i></span></span><span class="bigop"><span class="op">Σ</span><span class="lim"><i>i</i> ∈ batch</span></span></span><span class="br">[</span> <span class="t" id="tR"><i>r<sub>i</sub></i></span> + <i>γ</i> <span class="t" id="t2">max<sub><i>a</i></sub> <i>Q̂</i>(<i>s</i><sub><i>i</i>+1</sub>, <i>a</i>; <i>w</i><sup>−</sup>)</span> − <span class="t" id="t1"><i>Q̂</i>(<i>s<sub>i</sub></i>, <i>a<sub>i</sub></i>; <i>w</i>)</span> <span class="br">]</span><sup>2</sup>
       &emsp;&emsp; <span class="t" id="tW"><i>w</i> ← <i>w</i> − <i>η</i> ∇<sub><i>w</i></sub> <i>ℒ</i>(<i>w</i>)</span></div>
   </div>
 
@@ -207,7 +207,7 @@ button:disabled{opacity:.4; cursor:default}
       <text class="tag" x="520" y="206"><tspan font-style="italic">a</tspan><tspan font-style="italic" font-size="13" dy="4">t</tspan><tspan dy="-4"> = ε-greedy  argmax</tspan><tspan font-style="italic" font-size="13" dy="4">a</tspan><tspan dy="-4"> </tspan><tspan font-style="italic">Q̂</tspan>(<tspan font-style="italic">s</tspan><tspan font-style="italic" font-size="13" dy="4">t</tspan><tspan dy="-4">, </tspan><tspan font-style="italic">a</tspan>; <tspan font-style="italic">w</tspan>)</text>
       <text class="tag g" x="660" y="24"><tspan>action (</tspan><tspan font-style="italic">a</tspan><tspan font-style="italic" font-size="13" dy="4">t</tspan><tspan dy="-4">)</tspan></text>
       <text class="tag r" x="624" y="372"><tspan font-style="italic">Q̂</tspan>(<tspan font-style="italic">s</tspan><tspan font-style="italic" font-size="13" dy="4">i</tspan><tspan dy="-4">, </tspan><tspan font-style="italic">a</tspan><tspan font-style="italic" font-size="13" dy="4">i</tspan><tspan dy="-4">; </tspan><tspan font-style="italic">w</tspan>)  ①</text>
-      <text class="tag r" x="624" y="418">max<tspan font-style="italic" font-size="13" dy="4">a</tspan><tspan dy="-4"> </tspan><tspan font-style="italic">Q̂</tspan>(<tspan font-style="italic">s</tspan><tspan font-style="italic" font-size="13" dy="4">i+1</tspan><tspan dy="-4">, </tspan><tspan font-style="italic">a</tspan>; <tspan font-style="italic">w</tspan>)  ②</text>
+      <text class="tag r" x="624" y="418">max<tspan font-style="italic" font-size="13" dy="4">a</tspan><tspan dy="-4"> </tspan><tspan font-style="italic">Q̂</tspan>(<tspan font-style="italic">s</tspan><tspan font-style="italic" font-size="13" dy="4">i+1</tspan><tspan dy="-4">, </tspan><tspan font-style="italic">a</tspan>; <tspan font-style="italic">w</tspan><tspan font-size="11" dy="-6">−</tspan><tspan dy="6">)  ②</tspan></text>
       <text class="tag r" x="0" y="0" transform="translate(450,420) rotate(-90)">update <tspan font-style="italic">w</tspan></text>
       <rect id="bL" class="box lbox" x="383" y="440" width="152" height="44" rx="10"/>
       <text class="tag r" x="459" y="469" text-anchor="middle" style="font-size:21px;font-style:italic">ℒ</text>
@@ -230,7 +230,7 @@ button:disabled{opacity:.4; cursor:default}
       <text class="tag r" x="110" y="280">two passes: <tspan font-style="italic">s</tspan><tspan font-style="italic" font-size="13" dy="4">i</tspan><tspan dy="-4">&#8203;</tspan>, <tspan font-style="italic">s</tspan><tspan font-style="italic" font-size="13" dy="4">i+1</tspan><tspan dy="-4">&#8203;</tspan></text>
 
       <g id="net"></g>
-      <foreignObject x="250" y="474" width="630" height="66"><div xmlns="http://www.w3.org/1999/xhtml" class="fx"><i>ℒ</i> = <span class="frac"><span>1</span><span><i>B</i></span></span><span class="bigop"><span class="op">Σ</span><span class="lim"><i>i</i></span></span><span class="br">[</span> <i>r<sub>i</sub></i> + <i>γ</i> max <i>Q̂</i>(<i>s</i><sub><i>i</i>+1</sub>, <i>a</i>; <i>w</i>) ② − <i>Q̂</i>(<i>s<sub>i</sub></i>, <i>a<sub>i</sub></i>; <i>w</i>) ① <span class="br">]</span><sup>2</sup></div></foreignObject>
+      <foreignObject x="250" y="474" width="630" height="66"><div xmlns="http://www.w3.org/1999/xhtml" class="fx"><i>ℒ</i> = <span class="frac"><span>1</span><span><i>B</i></span></span><span class="bigop"><span class="op">Σ</span><span class="lim"><i>i</i></span></span><span class="br">[</span> <i>r<sub>i</sub></i> + <i>γ</i> max <i>Q̂</i>(<i>s</i><sub><i>i</i>+1</sub>, <i>a</i>; <i>w</i><sup>−</sup>) ② − <i>Q̂</i>(<i>s<sub>i</sub></i>, <i>a<sub>i</sub></i>; <i>w</i>) ① <span class="br">]</span><sup>2</sup></div></foreignObject>
 
       <g id="pkts"></g>
     </svg>
@@ -274,9 +274,9 @@ const ST=[
  {n:'Store in replay buffer',d:()=>`The transition <span class="mx">(<i>s<sub>t</sub></i>, <i>a<sub>t</sub></i>, <i>r<sub>t</sub></i>, <i>s<sub>t+1</sub></i>)</span> is appended to the replay buffer, which now holds <span class="mx"><i>N</i> = ${bufN()}</span> transitions. Old experience is kept, so it can be reused many times.`, eq:[]},
  {n:'Sample a mini-batch',d:()=>{const b=batch(),n=bufN();return (n<B?`Only ${n} transition${n>1?'s':''} stored so far, so the mini-batch uses all of them: `:`<span class="mx"><i>B</i> = ${B}</span> transitions are drawn at random from the buffer: `)+`<span class="mx"><i>i</i> ∈ {${b.join(', ')}}</span>. Random sampling breaks the correlation between consecutive steps.`;}, eq:['tB']},
  {n:'Pass 1',d:'Feed every <span class="mx"><i>s<sub>i</sub></i></span> in the mini-batch through the network and keep the output of the action taken: <span class="mx"><i>Q̂</i>(<i>s<sub>i</sub></i>, <i>a<sub>i</sub></i>; <i>w</i>)</span> ①. These are the predictions.', eq:['t1']},
- {n:'Pass 2',d:'Feed every <span class="mx"><i>s<sub>i+1</sub></i></span> through the <b>same</b> network and take the largest output: <span class="mx">max<sub><i>a</i></sub> <i>Q̂</i>(<i>s<sub>i+1</sub></i>, <i>a</i>; <i>w</i>)</span> ②.', eq:['t2']},
+ {n:'Pass 2',d:'Feed every <span class="mx"><i>s<sub>i+1</sub></i></span> through the same network, but with the weights from the previous iteration <span class="mx"><i>w</i><sup>−</sup></span>, and take the largest output: <span class="mx">max<sub><i>a</i></sub> <i>Q̂</i>(<i>s<sub>i+1</sub></i>, <i>a</i>; <i>w</i><sup>−</sup>)</span> ②.', eq:['t2']},
  {n:'Form the loss',d:'For each sample, the target is <span class="mx"><i>r<sub>i</sub></i> + <i>γ</i>·②</span>, compared with the prediction ①. The loss <span class="mx"><i>ℒ</i>(<i>w</i>)</span> averages the squared errors over the mini-batch.', eq:['tR','t1','t2','tB','tL']},
- {n:'Update the weights',d:'Backpropagate <span class="mx">∇<sub><i>w</i></sub><i>ℒ</i></span> and take a gradient step. The target still uses the same <span class="mx"><i>w</i></span>; a separate target network fixes that next. Then <span class="mx"><i>s<sub>t+1</sub></i></span> becomes the new state and the loop repeats.', eq:['tW']}
+ {n:'Update the weights',d:'Backpropagate <span class="mx">∇<sub><i>w</i></sub><i>ℒ</i></span> and take a gradient step. The target was computed with <span class="mx"><i>w</i><sup>−</sup></span>, the previous iteration’s weights, so it is held fixed during this step; after the step, <span class="mx"><i>w</i><sup>−</sup> ← <i>w</i></span>. Then <span class="mx"><i>s<sub>t+1</sub></i></span> becomes the new state and the loop repeats.', eq:['tW']}
 ];
 const LAST=ST.length-1, B=4;
 function mulberry32(a){return function(){a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296}}
@@ -343,7 +343,7 @@ async function animate(ph){
   if(ph===2){ boxes(['bSA','bR','bNs']); await move('pStore',`(${sub('s','t')}, ${sub('a','t')}, ${sub('r','t')}, ${sub('s','t+1')})`,'k'); boxes(['bBuf']); }
   if(ph===3){ boxes(['bBuf']); await move('pBufMB',`${batch().length} samples`,'k'); boxes(['bMB']); }
   if(ph===4){ boxes(['bMB']); await move('pMBNN',sub('s','i'),'r'); drawNet('fwd'); await move('pNNL','① '+`Q̂(${sub('s','i')}, ${sub('a','i')})`,'r'); drawNet(null); boxes(['bL']); }
-  if(ph===5){ boxes(['bMB']); await move('pMBNN',sub('s','i+1'),'r'); drawNet('fwd'); await move('pNNL','② max Q̂','r'); drawNet(null); boxes(['bL']); }
+  if(ph===5){ boxes(['bMB']); await move('pMBNN',sub('s','i+1'),'r'); drawNet('fwd'); await move('pNNL','② max Q̂(·; w⁻)','r'); drawNet(null); boxes(['bL']); }
   if(ph===6){ boxes(['bMB']); await move('pMBL',sub('r','i'),'r'); boxes(['bL']); }
   if(ph===7){ boxes(['bL']); await move('pLNN','∇w','r'); drawNet('upd'); await sleep(skip||reduce?0:P.dur*.6); drawNet(null); boxes([]); }
 }
