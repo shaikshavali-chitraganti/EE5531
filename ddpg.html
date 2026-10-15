@@ -1,0 +1,454 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>DDPG — how the pieces fit together</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&family=STIX+Two+Text:ital@0;1&display=swap" rel="stylesheet">
+<style>
+:root{
+  box-sizing:border-box;
+  padding-top:env(safe-area-inset-top,0px);
+  padding-bottom:env(safe-area-inset-bottom,0px);
+  --paper:#eef3f7; --panel:#ffffff; --ink:#14263a; --muted:#5a6d80; --line:#c9d6e2;
+  --grid:rgba(40,80,120,.07); --fwd:#1b6e8f; --good:#2f7d4f; --hi:#fff4c2;
+  --flow:#6e2323; --actn:#d9822b; --dpg:#a32a2a; --soft:#6b7785; --noise:#7a3fb0;
+  --envst:#1f4f7a; --envbg:#eef4fa; --actbg:#fdf3e8; --crbg:#fbeaea; --crst:#b3363a;
+  --sans:"Atkinson Hyperlegible",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+  --math:"STIX Two Text","Cambria Math","Times New Roman",serif;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --paper:#0f1b27; --panel:#152434; --ink:#e4edf5; --muted:#94a8bb; --line:#2b3f53;
+    --grid:rgba(160,200,240,.05); --fwd:#5cb7d8; --good:#6cc28e; --hi:#3a3616;
+    --flow:#e8a4a4; --actn:#f0a85a; --dpg:#f07b7f; --soft:#9aa8b6; --noise:#c39af0;
+    --envst:#7fb2e0; --envbg:#18293b; --actbg:#2a2218; --crbg:#2e1d22; --crst:#f07b7f;
+  }
+}
+:root[data-theme="dark"]{
+  --paper:#0f1b27; --panel:#152434; --ink:#e4edf5; --muted:#94a8bb; --line:#2b3f53;
+  --grid:rgba(160,200,240,.05); --fwd:#5cb7d8; --good:#6cc28e; --hi:#3a3616;
+  --flow:#e8a4a4; --actn:#f0a85a; --dpg:#f07b7f; --soft:#9aa8b6; --noise:#c39af0;
+  --envst:#7fb2e0; --envbg:#18293b; --actbg:#2a2218; --crbg:#2e1d22; --crst:#f07b7f;
+}
+*,*::before,*::after{box-sizing:inherit}
+body{
+  margin:0; color:var(--ink); font-family:var(--sans); font-size:17px; line-height:1.5;
+  background-color:var(--paper);
+  background-image:linear-gradient(var(--grid) 1px,transparent 1px),linear-gradient(90deg,var(--grid) 1px,transparent 1px);
+  background-size:24px 24px;
+}
+main{max-width:1080px; margin:0 auto; padding:28px 20px 48px}
+h1{font-size:2rem; line-height:1.15; margin:0 0 .5rem; letter-spacing:-.01em}
+h2{font-size:1.05rem; margin:0 0 .4rem}
+p{margin:.4rem 0}
+.lede{max-width:76ch; color:var(--muted)}
+.mx{font-family:var(--math); font-size:1.15em; white-space:nowrap; font-weight:400}
+.panel{background:var(--panel); border:1px solid var(--line); border-radius:10px; padding:16px 18px}
+
+.eq{margin-top:16px; font-family:var(--math); font-size:1.12rem; padding:10px 18px; overflow-x:auto}
+.eq .row{white-space:nowrap; line-height:2.1}
+.eq .lab{font-family:var(--sans); font-size:.8rem; color:var(--muted); display:inline-block; min-width:7.5em}
+.eq i{font-style:italic}
+.eq .t{padding:1px 3px; border-radius:4px; transition:background .3s}
+.eq .t.on{background:var(--hi); box-shadow:0 0 0 2px var(--dpg)}
+.frac{display:inline-flex; flex-direction:column; vertical-align:middle; text-align:center; margin:0 .12em}
+.frac>span:first-child{border-bottom:1.2px solid currentColor; padding:0 .2em; line-height:1.15}
+.frac>span:last-child{line-height:1.15}
+.bigop{display:inline-flex; flex-direction:column; align-items:center; vertical-align:middle; margin:0 .12em}
+.bigop .op{font-size:1.6em; line-height:.95}
+.bigop .lim{font-size:.62em; line-height:1.1}
+
+.schem{margin:12px 0 14px; padding:6px; overflow-x:auto}
+.schem svg{width:100%; min-width:760px; height:auto; max-height:min(640px,78vh); display:block; margin:0 auto}
+.box{stroke-width:2; transition:stroke-width .2s}
+.box.env{fill:var(--envbg); stroke:var(--envst)}
+.box.act{fill:var(--actbg); stroke:var(--envst)}
+.box.cr{fill:var(--crbg); stroke:var(--crst)}
+.box.plain{fill:var(--panel); stroke:var(--ink)}
+.box.inner{fill:var(--panel); stroke:var(--ink); stroke-width:1.2}
+.box.nz{fill:var(--panel); stroke:var(--noise)}
+.on > .box, .box.on{stroke-width:4; fill:var(--hi)}
+.bt{font:16px var(--sans); fill:var(--ink)}
+.bt.it{font-style:italic}
+.bt.sm{font-size:14px}
+.mv{font-family:var(--math); font-style:italic}
+.lbl{font:16px var(--math); fill:var(--ink)}
+.lbl i, .lbl .i{font-style:italic}
+.path{fill:none; transition:stroke-width .2s}
+.path.flow{stroke:var(--flow); stroke-width:2.2}
+.path.actn{stroke:var(--actn); stroke-width:5}
+.path.dpg{stroke:var(--dpg); stroke-width:5}
+.path.soft{stroke:var(--soft); stroke-width:6.5}
+.path.softin{stroke:var(--panel); stroke-width:2.2}
+.path.flow.on{stroke-width:4.5}
+.path.actn.on,.path.dpg.on{stroke-width:7.5}
+.path.soft.on{stroke-width:8.5}
+.brow{font:13.5px var(--math); fill:var(--ink); text-anchor:middle}
+.brow.new{fill:var(--good); font-weight:700}
+.pkt circle{stroke:var(--panel); stroke-width:2}
+.pkt rect{fill:var(--panel); stroke-width:1.5}
+.pkt text{font:16px var(--math); text-anchor:middle}
+.flash{animation:flash .9s ease-out 1}
+@keyframes flash{0%{fill:var(--hi)}50%{fill:var(--dpg); fill-opacity:.35}100%{fill:var(--hi)}}
+
+.caption{display:flex; gap:12px; align-items:baseline; padding:12px 18px; margin-top:-4px}
+.caption .n{font-weight:700; white-space:nowrap}
+.stepper{display:flex; flex-wrap:wrap; align-items:center; gap:10px 14px; margin:12px 0 0}
+.stepper .pos{font-weight:700; min-width:8.5em; text-align:center; font-variant-numeric:tabular-nums}
+.stagebar{display:flex; flex-wrap:wrap; gap:8px; margin:12px 0 0}
+.stagebar button{font-weight:400; border-color:var(--line); padding:7px 12px}
+.stagebar button b{margin-right:6px}
+.stagebar button.now{background:var(--hi); border-color:var(--ink); font-weight:700}
+.stagebar button.done{border-color:var(--ink)}
+.controls{display:flex; flex-wrap:wrap; gap:10px 14px; align-items:center; margin:14px 0}
+button{font:700 .95rem var(--sans); color:var(--ink); background:var(--panel); border:1.5px solid var(--ink); border-radius:8px; padding:8px 14px; cursor:pointer}
+button.primary{background:var(--ink); color:var(--panel)}
+button:disabled{opacity:.4; cursor:default}
+button:focus-visible,input:focus-visible,summary:focus-visible{outline:3px solid var(--fwd); outline-offset:2px}
+.stats{color:var(--muted); font-size:.95rem; font-variant-numeric:tabular-nums}
+.kbd{font-size:.85rem; color:var(--muted)}
+
+.plots{display:grid; grid-template-columns:repeat(auto-fit,minmax(300px,1fr)); gap:14px; margin-top:14px}
+.plots svg{width:100%; height:auto; display:block}
+.plots p{font-size:.9rem; color:var(--muted); margin:.3rem 0 0}
+.ax{stroke:var(--line); stroke-width:1}
+.zero{stroke:var(--line); stroke-width:1; stroke-dasharray:4 4}
+.ln{fill:none; stroke-width:2; stroke-linejoin:round}
+.key{display:flex; flex-wrap:wrap; gap:4px 14px; font-size:.85rem; color:var(--muted)}
+.key .sw{display:inline-block; width:18px; height:0; border-top:3px solid; vertical-align:middle; margin-right:5px}
+
+.fold{margin-top:16px}
+.fold summary{font-weight:700; font-size:1.1rem; cursor:pointer}
+.fold[open] summary{margin-bottom:10px}
+.params{display:grid; grid-template-columns:repeat(auto-fit,minmax(200px,1fr)); gap:10px 18px}
+.params label{display:flex; flex-direction:column; font-size:.9rem; color:var(--muted)}
+.params .lt b{color:var(--ink)}
+.check{flex-direction:row!important; align-items:center; gap:8px; color:var(--ink)!important}
+input[type=range]{width:100%; accent-color:var(--fwd)}
+@media (prefers-reduced-motion: reduce){ .path,.eq .t{transition:none} .flash{animation:none} }
+</style>
+</head>
+<body>
+<main>
+  <h1>DDPG: how the pieces fit together</h1>
+  <p class="lede">DQN picks an action by taking a max over a small menu of actions. A motor torque or a steering angle has no menu, so DDPG splits the job in two: an <b>actor</b> proposes a continuous action, and a <b>critic</b> scores it and tells the actor which way to adjust. Target copies, a replay buffer and exploration noise keep the learning stable.</p>
+
+  <div class="panel eq">
+    <div class="row"><span class="lab">act</span><span class="t" id="tA"><i>A<sub>t</sub></i> = <i>μ</i>(<i>S<sub>t</sub></i> | <i>θ<sup>μ</sup></i>)</span> + <span class="t" id="tN"><i>𝒩<sub>t</sub></i></span></div>
+    <div class="row"><span class="lab">target</span><span class="t" id="tY"><i>y<sub>i</sub></i> = <i>r<sub>i</sub></i> + <i>γ</i> <i>Q</i>′(<i>s</i><sub><i>i</i>+1</sub>, <i>μ</i>′(<i>s</i><sub><i>i</i>+1</sub> | <i>θ<sup>μ′</sup></i>) | <i>θ<sup>Q′</sup></i>)</span></div>
+    <div class="row"><span class="lab">critic loss</span><span class="t" id="tL"><i>L</i>(<i>θ<sup>Q</sup></i>) = <span class="frac"><span>1</span><span><i>N</i></span></span><span class="bigop"><span class="op">Σ</span><span class="lim"><i>i</i></span></span>(<i>y<sub>i</sub></i> − <i>Q</i>(<i>s<sub>i</sub></i>, <i>a<sub>i</sub></i> | <i>θ<sup>Q</sup></i>))<sup>2</sup></span></div>
+    <div class="row"><span class="lab">actor gradient</span><span class="t" id="tJ">∇<sub><i>θ<sup>μ</sup></i></sub><i>J</i> ≈ <span class="frac"><span>1</span><span><i>N</i></span></span><span class="bigop"><span class="op">Σ</span><span class="lim"><i>i</i></span></span>∇<sub><i>a</i></sub><i>Q</i>(<i>s</i>, <i>a</i> | <i>θ<sup>Q</sup></i>)|<sub><i>s</i>=<i>s<sub>i</sub></i>, <i>a</i>=<i>μ</i>(<i>s<sub>i</sub></i>)</sub> ∇<sub><i>θ<sup>μ</sup></i></sub><i>μ</i>(<i>s</i> | <i>θ<sup>μ</sup></i>)|<sub><i>s<sub>i</sub></i></sub></span></div>
+    <div class="row"><span class="lab">soft update</span><span class="t" id="tS"><i>θ<sup>Q′</sup></i> ← <i>τ θ<sup>Q</sup></i> + (1 − <i>τ</i>) <i>θ<sup>Q′</sup></i>, &nbsp; <i>θ<sup>μ′</sup></i> ← <i>τ θ<sup>μ</sup></i> + (1 − <i>τ</i>) <i>θ<sup>μ′</sup></i></span></div>
+  </div>
+
+  <div class="panel schem">
+    <svg id="svg" viewBox="0 0 980 640" role="img" aria-label="DDPG block diagram: environment, actor, critic, target actor, target critic, OU noise, replay buffer and random sampling">
+      <defs>
+        <marker id="mF" viewBox="0 0 10 10" refX="8" refY="5" markerUnits="userSpaceOnUse" markerWidth="12" markerHeight="12" orient="auto"><path d="M0,0 L10,5 L0,10 z" style="fill:var(--flow)"/></marker>
+        <marker id="mA" viewBox="0 0 10 10" refX="7" refY="5" markerUnits="userSpaceOnUse" markerWidth="16" markerHeight="16" orient="auto"><path d="M0,0 L10,5 L0,10 z" style="fill:var(--actn)"/></marker>
+        <marker id="mD" viewBox="0 0 10 10" refX="7" refY="5" markerUnits="userSpaceOnUse" markerWidth="20" markerHeight="20" orient="auto"><path d="M0,0 L10,5 L0,10 z" style="fill:var(--dpg)"/></marker>
+        <marker id="mS" viewBox="0 0 10 10" refX="6" refY="5" markerUnits="userSpaceOnUse" markerWidth="18" markerHeight="18" orient="auto"><path d="M0,0 L10,5 L0,10 z" style="fill:var(--soft)"/></marker>
+      </defs>
+
+      <!-- legend -->
+      <g transform="translate(400,14)">
+        <rect x="0" y="0" width="568" height="38" rx="6" style="fill:var(--panel);stroke:var(--line)"/>
+        <line x1="14" y1="19" x2="50" y2="19" class="path flow" marker-end="url(#mF)"/><text class="bt sm" x="58" y="24">data flow</text>
+        <line x1="148" y1="19" x2="182" y2="19" class="path actn" marker-end="url(#mA)"/><text class="bt sm" x="192" y="24">action</text>
+        <line x1="262" y1="19" x2="296" y2="19" class="path dpg" marker-end="url(#mD)"/><text class="bt sm" x="308" y="24">policy gradient</text>
+        <line x1="436" y1="19" x2="470" y2="19" class="path soft" marker-end="url(#mS)"/><line x1="436" y1="19" x2="464" y2="19" class="path softin"/><text class="bt sm" x="482" y="24">soft update</text>
+      </g>
+
+      <!-- paths (drawn under the boxes) -->
+      <path id="pS"   class="path flow" d="M220,330 L390,330" marker-end="url(#mF)"/>
+      <path id="pA"   class="path actn" d="M416,298 L416,205 L248,205 L248,156" marker-end="url(#mA)"/>
+      <path id="pAN"  class="path actn" d="M166,121 L120,121 L120,210" marker-end="url(#mA)"/>
+      <path id="pTr"  class="path flow" d="M488,362 L488,511" marker-end="url(#mF)"/>
+      <path id="pBS"  class="path flow" d="M584,558 L758,558" marker-end="url(#mF)"/>
+      <path id="pMB"  class="path flow" d="M856,534 L856,364" marker-end="url(#mF)"/>
+      <path id="pD"   class="path dpg"  d="M760,330 L590,330" marker-end="url(#mD)"/>
+      <path id="pTT"  class="path flow" d="M584,121 L758,121" marker-end="url(#mF)"/>
+      <path id="pY"   class="path flow" d="M924,153 L924,296" marker-end="url(#mF)"/>
+      <path id="pSA"  class="path soft" d="M488,298 L488,160" marker-end="url(#mS)"/>
+      <path class="path softin" d="M488,298 L488,166"/>
+      <path id="pSC"  class="path soft" d="M856,298 L856,160" marker-end="url(#mS)"/>
+      <path class="path softin" d="M856,298 L856,166"/>
+
+      <!-- environment -->
+      <g id="gEnv"><rect class="box env" x="20" y="215" width="200" height="230" rx="8"/></g>
+      <text class="bt it" x="120" y="242" text-anchor="middle">Environment</text>
+      <rect class="box inner" x="45" y="290" width="150" height="54" rx="5"/>
+      <text class="bt it sm" x="120" y="313" text-anchor="middle">Physical</text>
+      <text class="bt it sm" x="120" y="332" text-anchor="middle">environment</text>
+      <g id="gSen"><rect class="box inner" x="65" y="392" width="110" height="32" rx="5"/></g>
+      <text class="bt it sm" x="120" y="413" text-anchor="middle">Sensors</text>
+
+      <!-- actor / critic -->
+      <g id="gAct"><rect class="box act" x="392" y="298" width="192" height="64" rx="6"/></g>
+      <text class="bt" x="488" y="336" text-anchor="middle">Actor <tspan class="mv">μ</tspan>(<tspan class="mv">s</tspan>|<tspan class="mv">θ</tspan><tspan class="mv" font-size="11" dy="-7">μ</tspan><tspan dy="7">)</tspan></text>
+      <g id="gCr"><rect class="box cr" x="760" y="298" width="192" height="64" rx="6"/></g>
+      <text class="bt" x="856" y="336" text-anchor="middle">Critic <tspan class="mv">Q</tspan>(<tspan class="mv">s</tspan>,<tspan class="mv">a</tspan>|<tspan class="mv">θ</tspan><tspan class="mv" font-size="11" dy="-7">Q</tspan><tspan dy="7">)</tspan></text>
+
+      <!-- targets -->
+      <g id="gTA"><rect class="box act" x="392" y="89" width="192" height="64" rx="6"/></g>
+      <text class="bt" x="488" y="127" text-anchor="middle">Target actor <tspan class="mv">μ′</tspan></text>
+      <g id="gTC"><rect class="box cr" x="760" y="89" width="192" height="64" rx="6"/></g>
+      <text class="bt" x="856" y="127" text-anchor="middle">Target critic <tspan class="mv">Q′</tspan></text>
+
+      <!-- noise -->
+      <g id="gNz"><ellipse class="box nz" cx="248" cy="121" rx="82" ry="32"/></g>
+      <text class="bt" x="248" y="127" text-anchor="middle">OU noise <tspan class="mv">𝒩</tspan></text>
+
+      <!-- buffer and sampling -->
+      <g id="gBuf"><rect class="box env" x="392" y="513" width="192" height="92" rx="6"/></g>
+      <text class="bt it sm" x="488" y="533" text-anchor="middle">Replay buffer <tspan class="mv" font-style="normal">ℛ</tspan></text>
+      <g id="bufrows"></g>
+      <text class="bt sm" id="bufN" x="488" y="625" text-anchor="middle" style="fill:var(--muted)"></text>
+      <g id="gSmp"><rect class="box plain" x="760" y="534" width="192" height="48" rx="6"/></g>
+      <text class="bt it sm" x="856" y="563" text-anchor="middle">Random sampling</text>
+      <text class="lbl" id="pickTxt" x="856" y="606" text-anchor="middle" style="fill:var(--dpg)"></text>
+
+      <!-- arrow labels -->
+      <text class="lbl" x="305" y="320" text-anchor="middle"><tspan class="i">S</tspan><tspan class="i" font-size="12" dy="4">t</tspan></text>
+      <text class="lbl" x="426" y="258"><tspan class="i">A</tspan><tspan class="i" font-size="12" dy="4">t</tspan></text>
+      <text class="lbl" x="110" y="176" text-anchor="end"><tspan class="i">A</tspan><tspan class="i" font-size="12" dy="4">t</tspan><tspan dy="-4"> + </tspan><tspan class="i">𝒩</tspan><tspan class="i" font-size="12" dy="4">t</tspan></text>
+      <text class="lbl" x="478" y="444" text-anchor="end" style="font-size:14px">(<tspan class="i">S</tspan><tspan class="i" font-size="11" dy="4">t</tspan><tspan dy="-4">, </tspan><tspan class="i">A</tspan><tspan class="i" font-size="11" dy="4">t</tspan><tspan dy="-4">, </tspan><tspan class="i">R</tspan><tspan class="i" font-size="11" dy="4">t</tspan><tspan dy="-4">, </tspan><tspan class="i">S</tspan><tspan class="i" font-size="11" dy="4">t+1</tspan><tspan dy="-4">)</tspan></text>
+      <text class="lbl" x="866" y="455" style="font-size:14px">minibatch</text>
+      <text class="lbl" x="675" y="318" text-anchor="middle" style="fill:var(--dpg)">∇<tspan class="i" font-size="12" dy="4">a</tspan><tspan dy="-4" class="i">Q</tspan></text>
+      <text class="lbl" x="671" y="110" text-anchor="middle"><tspan class="i">μ′</tspan>(<tspan class="i">s</tspan><tspan class="i" font-size="12" dy="4">i+1</tspan><tspan dy="-4">)</tspan></text>
+      <text class="lbl" x="934" y="232"><tspan class="i">y</tspan><tspan class="i" font-size="12" dy="4">i</tspan></text>
+      <text class="lbl i" x="474" y="236" text-anchor="end" style="fill:var(--soft)">τ</text>
+      <text class="lbl i" x="870" y="236" style="fill:var(--soft)">τ</text>
+
+      <g id="pkts"></g>
+    </svg>
+  </div>
+  <div class="panel caption" aria-live="polite"><span class="n" id="capN">Ready</span><span class="d" id="capD"></span></div>
+
+  <div class="stepper">
+    <button id="bPrev" aria-label="Previous stage">◀ Previous</button>
+    <span class="pos" id="pos">Stage – of 9</span>
+    <button id="bNext" class="primary" aria-label="Next stage">Next ▶</button>
+    <button id="bAgain">Replay this stage</button>
+  </div>
+  <div class="stagebar" id="stagebar" role="group" aria-label="Jump to a stage"></div>
+
+  <div class="controls">
+    <button id="bStep">Play one step</button>
+    <button id="bPlay">Play</button>
+    <button id="bReset">Reset</button>
+    <span class="stats" id="stats"></span>
+  </div>
+  <p class="kbd">Keyboard: Space or → for next stage, ← for previous, S to play one full step, P to play or pause.</p>
+
+  <div class="plots">
+    <div class="panel">
+      <h2>Exploration noise <span class="mx"><i>𝒩<sub>t</sub></i></span></h2>
+      <svg id="plotN" viewBox="0 0 420 150" role="img" aria-label="Ornstein–Uhlenbeck noise samples over time"></svg>
+      <div class="key"><span><span class="sw" style="border-color:var(--noise)"></span>OU noise</span><span id="keyG" hidden><span class="sw" style="border-color:var(--soft)"></span>uncorrelated Gaussian, same σ</span></div>
+      <p>OU noise drifts and is pulled back to 0 at rate <span class="mx"><i>θ</i></span>, so it pushes in one direction for several steps. A physical system with inertia actually moves under such a push; white noise mostly cancels itself out.</p>
+    </div>
+    <div class="panel">
+      <h2>Soft target tracking</h2>
+      <svg id="plotW" viewBox="0 0 420 150" role="img" aria-label="A learned weight and its target copy over time"></svg>
+      <div class="key"><span><span class="sw" style="border-color:var(--crst)"></span>a critic weight <span class="mx"><i>θ<sup>Q</sup></i></span></span><span><span class="sw" style="border-color:var(--soft)"></span>its target copy <span class="mx"><i>θ<sup>Q′</sup></i></span></span></div>
+      <p>The trained weight jumps around as each minibatch pulls it a different way. The target copy follows it smoothly, so <span class="mx"><i>y<sub>i</sub></i></span> changes slowly. Smaller <span class="mx"><i>τ</i></span> means smoother but slower targets.</p>
+    </div>
+  </div>
+
+  <details class="panel fold">
+    <summary>Settings</summary>
+    <div class="params">
+      <label><span class="lt">Travel time per arrow = <b id="vSp"></b></span><input type="range" id="pSp" min="200" max="2500" step="50" value="900"></label>
+      <label><span class="lt">Soft-update rate <span class="mx"><i>τ</i></span> = <b id="vTau"></b></span><input type="range" id="pTau" min="0.01" max="0.5" step="0.01" value="0.1"></label>
+      <label><span class="lt">OU mean reversion <span class="mx"><i>θ</i></span> = <b id="vTh"></b></span><input type="range" id="pTh" min="0.02" max="1" step="0.01" value="0.15"></label>
+      <label><span class="lt">OU volatility <span class="mx"><i>σ</i></span> = <b id="vSg"></b></span><input type="range" id="pSg" min="0.05" max="0.6" step="0.01" value="0.2"></label>
+      <label class="check"><input type="checkbox" id="pG"> Compare with uncorrelated Gaussian noise</label>
+    </div>
+    <p class="kbd">Typical DDPG values are τ = 0.001 to 0.01. The larger default here just makes the lag easy to see.</p>
+  </details>
+</main>
+
+<script>
+(function(){
+const $=id=>document.getElementById(id);
+const reduce=window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+const P={dur:900,tau:0.1,th:0.15,sg:0.2,gauss:false};
+let queued=false,t=0,phase=-1,playing=false,busy=false,skip=false,token=0;
+const B=4;
+
+/* deterministic random numbers */
+function mulberry32(a){return function(){a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296}}
+function gaussSeq(seed,n){const r=mulberry32(seed),o=[];for(let k=0;k<n;k++){const u=Math.max(1e-9,r()),v=r();o.push(Math.sqrt(-2*Math.log(u))*Math.cos(2*Math.PI*v));}return o;}
+
+/* OU noise N_0..N_n and Gaussian comparison */
+function ouSeries(n){const e=gaussSeq(101,n+1),o=[];let x=0;for(let k=0;k<=n;k++){x=x+P.th*(0-x)+P.sg*e[k];o.push(x);}return o;}
+function gSeries(n){const e=gaussSeq(202,n+1);return e.map(v=>P.sg*v);}
+/* a learned weight (jittery) and its soft-updated target, theta'_0..theta'_n */
+function wSeries(n){const e=gaussSeq(303,n+2),w=[],wt=[];let x=0,xt=0;
+  for(let k=0;k<=n;k++){const goal=0.8*Math.sin(k/11)+(k>25?0.5:0);x=x+0.35*(goal-x)+0.18*e[k];w.push(x);xt=P.tau*x+(1-P.tau)*xt;wt.push(xt);}
+  return {w,wt};}
+
+const bufN=()=>t+(phase>=3?1:0);
+function batch(){const n=bufN(),r=mulberry32(t*7919+13),pool=[...Array(n)].map((_,i)=>i+1),out=[];while(out.length<Math.min(B,n))out.push(pool.splice(Math.floor(r()*pool.length),1)[0]);return out.sort((a,b)=>a-b);}
+const fmt=v=>(v>=0?'+':'−')+Math.abs(v).toFixed(2);
+
+const ST=[
+ {n:'Observe',d:'The sensors measure the state <span class="mx"><i>S<sub>t</sub></i></span> of the physical environment and pass it to the actor <span class="mx"><i>μ</i>(<i>s</i> | <i>θ<sup>μ</sup></i>)</span>.',eq:[]},
+ {n:'Actor proposes an action',d:'The actor outputs one continuous action <span class="mx"><i>A<sub>t</sub></i> = <i>μ</i>(<i>S<sub>t</sub></i>)</span> directly. There is no max over a list of actions, which is what lets DDPG handle torques, voltages and steering angles. The actor is deterministic: the same state always gives the same action, so on its own it would never explore.',eq:['tA']},
+ {n:'Add exploration noise',d:()=>`OU noise is added before the action reaches the plant: <span class="mx"><i>𝒩<sub>t</sub></i> = ${fmt(ouSeries(t)[t])}</span>. The environment receives <span class="mx"><i>A<sub>t</sub></i> + <i>𝒩<sub>t</sub></i></span>. The noise is only for exploring. It is never part of the learned policy.`,eq:['tN']},
+ {n:'Store the transition',d:()=>`The plant moves; the sensors report <span class="mx"><i>S<sub>t+1</sub></i></span> and the reward <span class="mx"><i>R<sub>t</sub></i></span> is computed. The transition <span class="mx">(<i>S<sub>t</sub></i>, <i>A<sub>t</sub></i>, <i>R<sub>t</sub></i>, <i>S<sub>t+1</sub></i>)</span> is appended to the replay buffer, which now holds ${bufN()} transition${bufN()>1?'s':''}.`,eq:[]},
+ {n:'Sample a minibatch',d:()=>{const b=batch(),n=bufN();return (n<B?`Only ${n} transition${n>1?'s are':' is'} stored so far, so the minibatch uses all of them: `:`<span class="mx"><i>N</i> = ${B}</span> transitions are drawn at random: `)+`<span class="mx"><i>i</i> ∈ {${b.join(', ')}}</span>. Random sampling breaks the correlation between consecutive steps, as in DQN.`;},eq:[]},
+ {n:'Compute the targets',d:'For each sample, the <b>target actor</b> picks the next action <span class="mx"><i>μ</i>′(<i>s</i><sub><i>i</i>+1</sub>)</span>, and the <b>target critic</b> scores it. This gives <span class="mx"><i>y<sub>i</sub></i> = <i>r<sub>i</sub></i> + <i>γ Q</i>′(<i>s</i><sub><i>i</i>+1</sub>, <i>μ</i>′(<i>s</i><sub><i>i</i>+1</sub>))</span>. This takes the place of DQN\'s max over actions. Both target networks move slowly, so <span class="mx"><i>y<sub>i</sub></i></span> does not chase the critic being trained.',eq:['tY']},
+ {n:'Update the critic',d:'The critic is regressed onto the targets. It minimises the squared TD error <span class="mx">(<i>y<sub>i</sub></i> − <i>Q</i>(<i>s<sub>i</sub></i>, <i>a<sub>i</sub></i>))<sup>2</sup></span> over the minibatch and takes a gradient step on <span class="mx"><i>θ<sup>Q</sup></i></span>. The critic\'s job is to judge actions accurately.',eq:['tL']},
+ {n:'Update the actor',d:'The critic now tells the actor which way to move. <span class="mx">∇<sub><i>a</i></sub><i>Q</i></span> at <span class="mx"><i>a</i> = <i>μ</i>(<i>s<sub>i</sub></i>)</span> says how a small change in the action would change the score. Chained back through the actor, this gives the gradient for <span class="mx"><i>θ<sup>μ</sup></i></span>. The actor climbs the critic\'s value surface.',eq:['tJ']},
+ {n:'Soft-update the targets',d:()=>`Each target network moves a fraction <span class="mx"><i>τ</i> = ${P.tau.toFixed(2)}</span> of the way toward its learned network. DQN instead copies the weights in full every <span class="mx"><i>k</i></span> steps; here the targets drift there gradually. Then <span class="mx"><i>S<sub>t+1</sub></i></span> becomes the current state and the loop repeats.`,eq:['tS']}
+];
+const LAST=ST.length-1;
+$('stagebar').innerHTML=ST.map((s,i)=>`<button data-k="${i}"><b>${i+1}</b>${s.n}</button>`).join('');
+
+/* buffer drawing */
+const tsub=(b,x)=>`<tspan font-style="italic">${b}</tspan><tspan font-style="italic" font-size="10" dy="3">${x}</tspan><tspan dy="-3">&#8203;</tspan>`;
+function renderBuf(){
+  const n=bufN();let h='';
+  if(n===0)h=`<text class="brow" x="488" y="568" style="fill:var(--muted)">empty</text>`;
+  else{
+    const lo=Math.max(1,n-1);let y=556;
+    for(let k=lo;k<=n;k++,y+=19){const cls=(phase===3&&k===n)?' new':'';
+      h+=`<text class="brow${cls}" x="488" y="${y}">(${tsub('S',k)}, ${tsub('A',k)}, ${tsub('R',k)}, ${tsub('S',k+1)})</text>`;}
+    h+=`<text class="brow" x="488" y="${y-2}" style="fill:var(--muted)">⋯</text>`;
+  }
+  $('bufrows').innerHTML=h;
+  $('bufN').textContent=`${n} stored`;
+  $('pickTxt').innerHTML=(phase>=4&&n>0)?`i ∈ {${batch().join(', ')}}`:'';
+}
+
+/* plots */
+function poly(vals,x0,x1,y0,y1,lo,hi,start,win){
+  return vals.map((v,k)=>{const x=x0+(x1-x0)*((start+k)/(win-1||1)),y=y1-(y1-y0)*((v-lo)/(hi-lo));return `${x.toFixed(1)},${Math.max(y0,Math.min(y1,y)).toFixed(1)}`;}).join(' ');
+}
+function plotFrame(lo,hi,tlast,win){
+  const y0=10,y1=126,x0=34,x1=410,yz=y1-(y1-y0)*((0-lo)/(hi-lo));
+  return `<line class="ax" x1="${x0}" y1="${y0}" x2="${x0}" y2="${y1}"/><line class="ax" x1="${x0}" y1="${y1}" x2="${x1}" y2="${y1}"/>`+
+    `<line class="zero" x1="${x0}" y1="${yz}" x2="${x1}" y2="${yz}"/>`+
+    `<text x="${x0-6}" y="${yz+4}" text-anchor="end" style="font:12px var(--sans);fill:var(--muted)">0</text>`+
+    `<text x="${x1}" y="${y1+18}" text-anchor="end" style="font:12px var(--sans);fill:var(--muted)">time step t = ${tlast}</text>`;
+}
+const WIN=50;
+function renderPlots(){
+  const nN=phase>=2?t:t-1;
+  let s=plotFrame(-1.2,1.2,Math.max(0,nN),WIN);
+  if(nN>=0){
+    const all=ouSeries(nN),st=Math.max(0,all.length-WIN),v=all.slice(st);
+    if(P.gauss){const g=gSeries(nN).slice(st);s+=`<polyline class="ln" style="stroke:var(--soft);stroke-width:1.5" points="${poly(g,34,410,10,126,-1.2,1.2,0,WIN)}"/>`;}
+    s+=`<polyline class="ln" style="stroke:var(--noise)" points="${poly(v,34,410,10,126,-1.2,1.2,0,WIN)}"/>`;
+    const last=v[v.length-1],x=34+376*((v.length-1)/(WIN-1)),y=126-116*((last+1.2)/2.4);
+    s+=`<circle cx="${x}" cy="${Math.max(10,Math.min(126,y))}" r="4" style="fill:var(--noise)"/>`;
+  } else s+=`<text x="222" y="72" text-anchor="middle" style="font:13px var(--sans);fill:var(--muted)">no actions taken yet</text>`;
+  $('plotN').innerHTML=s;
+
+  const nW=phase===LAST?t:t-1;
+  let w=plotFrame(-1.4,1.8,Math.max(0,nW),WIN);
+  if(nW>=0){
+    const {w:ws,wt}=wSeries(nW),st=Math.max(0,ws.length-WIN);
+    w+=`<polyline class="ln" style="stroke:var(--crst);stroke-width:1.6;opacity:.85" points="${poly(ws.slice(st),34,410,10,126,-1.4,1.8,0,WIN)}"/>`;
+    w+=`<polyline class="ln" style="stroke:var(--soft);stroke-width:2.6" points="${poly(wt.slice(st),34,410,10,126,-1.4,1.8,0,WIN)}"/>`;
+  } else w+=`<text x="222" y="72" text-anchor="middle" style="font:13px var(--sans);fill:var(--muted)">no soft updates yet</text>`;
+  $('plotW').innerHTML=w;
+}
+
+/* animation */
+const sleep=ms=>new Promise(r=>setTimeout(r,ms));
+const COL={f:'var(--flow)',a:'var(--actn)',d:'var(--dpg)',s:'var(--soft)'};
+function move(pid,label,cls){
+  return new Promise(res=>{
+    const my=token,path=$(pid),len=path.getTotalLength(),col=COL[cls];
+    const g=document.createElementNS('http://www.w3.org/2000/svg','g');g.setAttribute('class','pkt');
+    const w=Math.max(30,label.replace(/<[^>]+>/g,'').replace(/&#8203;/g,'').length*9+18);
+    g.innerHTML=`<circle r="7" style="fill:${col}"/><rect x="${-w/2}" y="-36" width="${w}" height="27" rx="6" style="stroke:${col}"/><text y="-17" style="fill:${col};font-style:italic">${label}</text>`;
+    $('pkts').appendChild(g);path.classList.add('on');
+    const D=(reduce||skip)?0:P.dur,t0=performance.now();
+    const fr=now=>{
+      if(my!==token){g.remove();path.classList.remove('on');res();return;}
+      const k=(D===0||skip)?1:Math.min(1,(now-t0)/D),e=k<.5?2*k*k:1-Math.pow(-2*k+2,2)/2;
+      const pt=path.getPointAtLength(len*e);g.setAttribute('transform',`translate(${pt.x},${pt.y})`);
+      if(k<1)requestAnimationFrame(fr);else setTimeout(()=>{g.remove();path.classList.remove('on');res();},D?200:0);
+    };
+    requestAnimationFrame(fr);
+  });
+}
+const sub=(b,s)=>`${b}<tspan font-size="12" dy="4">${s}</tspan><tspan dy="-4">&#8203;</tspan>`;
+const BX=['gEnv','gSen','gAct','gCr','gTA','gTC','gNz','gBuf','gSmp'];
+function boxes(ids){BX.forEach(id=>$(id).classList.toggle('on',ids.includes(id)));}
+function pulse(id){const r=$(id).firstElementChild;r.classList.remove('flash');void r.getBBox();if(!reduce)r.classList.add('flash');}
+async function animate(ph){
+  if(ph===0){boxes(['gEnv','gSen']);await move('pS',sub('S','t'),'f');boxes(['gAct']);}
+  if(ph===1){boxes(['gAct']);await move('pA',sub('A','t'),'a');boxes(['gNz']);}
+  if(ph===2){boxes(['gNz']);await move('pAN',`${sub('A','t')} + ${sub('𝒩','t')}`,'a');boxes(['gEnv']);}
+  if(ph===3){boxes(['gAct']);await move('pTr',`(${sub('S','t')}, ${sub('A','t')}, ${sub('R','t')}, ${sub('S','t+1')})`,'f');boxes(['gBuf']);}
+  if(ph===4){boxes(['gBuf']);await move('pBS',`${batch().length} samples`,'f');boxes(['gSmp']);await move('pMB','minibatch','f');boxes(['gCr']);}
+  if(ph===5){boxes(['gTA']);await move('pTT',`μ′(${sub('s','i+1')})`,'f');boxes(['gTC']);await move('pY',sub('y','i'),'f');boxes(['gCr']);}
+  if(ph===6){boxes(['gCr']);pulse('gCr');await sleep(skip||reduce?0:P.dur*.9);}
+  if(ph===7){boxes(['gCr']);await move('pD',`∇${sub('a','')}Q`,'d');boxes(['gAct']);pulse('gAct');await sleep(skip||reduce?0:P.dur*.5);}
+  if(ph===8){boxes(['gAct','gCr']);await Promise.all([move('pSA','τ','s'),move('pSC','τ','s')]);boxes(['gTA','gTC']);}
+}
+function show(){
+  [...$('stagebar').children].forEach((el,i)=>el.className=phase<0?'':(i<phase?'done':i===phase?'now':''));
+  ['tA','tN','tY','tL','tJ','tS'].forEach(id=>$(id).classList.remove('on'));
+  if(phase>=0){ST[phase].eq.forEach(id=>$(id).classList.add('on'));$('capN').textContent=`${phase+1} / ${ST.length} · ${ST[phase].n}`;const d=ST[phase].d;$('capD').innerHTML=typeof d==='function'?d():d;}
+  else{$('capN').textContent='Ready';$('capD').innerHTML='Press “Next ▶” to follow one time step of DDPG through the diagram.';}
+  $('pos').textContent=phase<0?`Stage – of ${ST.length}`:`Stage ${phase+1} of ${ST.length}`;
+  $('bPrev').disabled=phase<=0&&t===0;$('bAgain').disabled=phase<0;
+  renderBuf();renderPlots();
+  $('stats').innerHTML=`Time step <span class="mx"><i>t</i> = ${t}</span> · replay buffer holds <b>${bufN()}</b>`;
+}
+async function stage(){
+  if(busy){skip=true;queued=true;return;}
+  busy=true;skip=false;const my=token;
+  if(phase===LAST||phase===-1){if(phase===LAST)t++;phase=0;}else phase++;
+  show();await animate(phase);
+  busy=false;skip=false;if(my!==token)return;
+  if(queued){queued=false;await stage();}
+}
+function stopAll(){token++;queued=false;playing=false;busy=false;skip=false;$('bPlay').textContent='Play';$('bStep').textContent='Play one step';$('pkts').innerHTML='';document.querySelectorAll('.path.on').forEach(e=>e.classList.remove('on'));}
+async function play(){
+  if(playing){stopAll();return;}
+  stopAll();playing=true;$('bPlay').textContent='Pause';const my=token;
+  while(playing&&my===token){await stage();await sleep(reduce?400:Math.max(250,P.dur*.5));}
+}
+async function playStep(){
+  stopAll();const my=token;$('bStep').textContent='Playing…';
+  do{await stage();if(my!==token)return;if(phase!==LAST)await sleep(reduce?300:Math.max(200,P.dur*.35));}while(phase!==LAST);
+  $('bStep').textContent='Play one step';
+}
+function reset(){stopAll();t=0;phase=-1;boxes([]);show();}
+function goTo(k){stopAll();phase=k-1;stage();}
+
+/* settings */
+function bind(id,vid,key,f){const el=$(id),u=()=>{P[key]=+el.value;$(vid).textContent=f(P[key]);if(phase!==undefined)show();};el.addEventListener('input',u);u();}
+bind('pSp','vSp','dur',v=>v+' ms');
+bind('pTau','vTau','tau',v=>v.toFixed(2));
+bind('pTh','vTh','th',v=>v.toFixed(2));
+bind('pSg','vSg','sg',v=>v.toFixed(2));
+$('pG').addEventListener('change',e=>{P.gauss=e.target.checked;$('keyG').hidden=!P.gauss;show();});
+
+$('stagebar').addEventListener('click',e=>{const b=e.target.closest('button');if(!b)return;goTo(+b.dataset.k);});
+$('bNext').onclick=()=>{if(playing)stopAll();stage();};
+$('bPrev').onclick=()=>{if(phase>0)goTo(phase-1);else if(phase===0&&t>0){t--;goTo(LAST);}};
+$('bAgain').onclick=()=>{if(phase>=0){const k=phase;if(k===0){stopAll();phase=-1;stage();}else goTo(k);}};
+$('bStep').onclick=playStep;$('bPlay').onclick=play;$('bReset').onclick=reset;
+document.addEventListener('keydown',e=>{
+  if(['INPUT','BUTTON','SUMMARY'].includes(e.target.tagName))return;
+  if(e.code==='Space'||e.key==='ArrowRight'){e.preventDefault();if(playing)stopAll();stage();}
+  else if(e.key==='ArrowLeft'){e.preventDefault();$('bPrev').click();}
+  else if(e.key==='s'||e.key==='S')playStep();
+  else if(e.key==='p'||e.key==='P')play();
+});
+reset();
+})();
+</script>
+</body>
+</html>
